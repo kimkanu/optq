@@ -1,5 +1,5 @@
 import { QueryClient, onlineManager, focusManager } from "@tanstack/query-core";
-import { nanoid } from "nanoid";
+import { nanoid } from "nanoid/non-secure";
 import objectHash from "object-hash";
 import { proxy } from "valtio/vanilla";
 
@@ -191,12 +191,7 @@ function getMutator<Api extends OptqApiBase<Api>>(optq: {
 
     // biome-ignore lint/style/noArguments: use of `arguments` is required
     if (arguments.length > 1) {
-      if (
-        "env" in import.meta &&
-        (import.meta as ImportMeta & { env: Record<string, string> }).env.NODE_ENV !== "test"
-      ) {
-        throw new Error("Arguments other than the first one are only allowed in test environment.");
-      }
+      console.warn("Do not use additional arguments of `mutate` in production.");
 
       // biome-ignore lint/style/noArguments: use of `arguments` is required
       CREATE_DEBUG_RESPONSE = arguments[1] as () => Promise<Res>;
