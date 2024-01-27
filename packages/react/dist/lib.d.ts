@@ -15,7 +15,7 @@ type UseOptqQueryArgument<Api extends OptqApiBase<Api>, ResId extends OptqResour
     params: EmptyToUndefined<OptqParams<Api, `GET ${ResId}` & Exclude<keyof Api, OptqAdditionalApiTypeKeys>>>;
 }> & Omit<UseQueryOptions, "queryKey" | "queryFn">;
 export type UseOptq<Api extends OptqApiBase<Api>> = Optq<Api> & {
-    useOptqQuery: <ResId extends OptqResourceId<Api>>(arg: UseOptqQueryArgument<Api, ResId>) => UseQueryResult<OptqResourceData<Api, ResId>> & {
+    useQuery: <ResId extends OptqResourceId<Api>>(arg: UseOptqQueryArgument<Api, ResId>) => UseQueryResult<OptqResourceData<Api, ResId>> & {
         last: OptqGetResponse<Api, ResId>;
     };
 };

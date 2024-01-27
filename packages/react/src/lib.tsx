@@ -41,7 +41,7 @@ type UseOptqQueryArgument<Api extends OptqApiBase<Api>, ResId extends OptqResour
   Omit<UseQueryOptions, "queryKey" | "queryFn">;
 
 export type UseOptq<Api extends OptqApiBase<Api>> = Optq<Api> & {
-  useOptqQuery: <ResId extends OptqResourceId<Api>>(
+  useQuery: <ResId extends OptqResourceId<Api>>(
     // @ts-ignore
     arg: UseOptqQueryArgument<Api, ResId>,
   ) => UseQueryResult<OptqResourceData<Api, ResId>> & {
