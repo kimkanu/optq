@@ -12,8 +12,10 @@
     "dist",
     "src"
   ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "dependencies": {
-    "@optq/core": "workspace:*",
+    "@optq/core": "0.1.0",
     "@tanstack/react-query": "^5.17.19",
     "react": "^18.2.0"
   },
@@ -22,5 +24,6 @@
   },
   "scripts": {
     "build": "rimraf dist && tsc --build && esbuild --minify dist/**/*.js --outdir=dist --allow-overwrite"
-  }
+  },
+  "gitHead": "6f81f9c96b3f3f1190a5519c7d7465280abed7b6"
 }

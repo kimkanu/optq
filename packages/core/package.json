@@ -12,6 +12,8 @@
     "dist",
     "src"
   ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "dependencies": {
     "@tanstack/query-core": "^5.17.19",
     "nanoid": "^5.0.4",
@@ -24,5 +26,6 @@
   },
   "scripts": {
     "build": "rimraf dist && tsc --build && esbuild --minify dist/**/*.js --outdir=dist --allow-overwrite"
-  }
+  },
+  "gitHead": "6f81f9c96b3f3f1190a5519c7d7465280abed7b6"
 }
