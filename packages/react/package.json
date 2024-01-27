@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json.schemastore.org/package",
+  "name": "@optq/react",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "React bindings for OptQ.",
+  "exports": {
+    ".": "./dist/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "dependencies": {
+    "@optq/core": "workspace:*",
+    "@tanstack/react-query": "^5.17.19",
+    "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.48"
+  },
+  "scripts": {
+    "build": "rimraf dist && tsc --build && esbuild --minify dist/**/*.js --outdir=dist --allow-overwrite"
+  }
+}

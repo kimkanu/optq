@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json.schemastore.org/package",
+  "name": "optq",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "OptQ is a library for optimistic data queries in JavaScript.",
+  "workspaces": [
+    "packages/*"
+  ],
+  "devDependencies": {
+    "@biomejs/biome": "^1.5.3",
+    "esbuild": "^0.19.12",
+    "lerna": "^8.0.2",
+    "rimraf": "^5.0.5",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.2"
+  },
+  "scripts": {
+    "test": "vitest --exclude packages/**/types.spec.ts",
+    "build": "lerna run build",
+    "publish": "lerna publish --no-private"
+  }
+}

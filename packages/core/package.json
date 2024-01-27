@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json.schemastore.org/package",
+  "name": "@optq/core",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "The core library for OptQ.",
+  "exports": {
+    ".": "./dist/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "dependencies": {
+    "@tanstack/query-core": "^5.17.19",
+    "nanoid": "^5.0.4",
+    "object-hash": "^3.0.0",
+    "valtio": "^1.13.0"
+  },
+  "devDependencies": {
+    "@types/object-hash": "^3.0.6",
+    "superjson": "^2.2.1"
+  },
+  "scripts": {
+    "build": "rimraf dist && tsc --build && esbuild --minify dist/**/*.js --outdir=dist --allow-overwrite"
+  }
+}

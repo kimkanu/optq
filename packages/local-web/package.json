@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json.schemastore.org/package",
+  "name": "@optq/local-web",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Cache OptQ queries locally in web environments.",
+  "exports": {
+    ".": "./dist/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "dependencies": {
+    "@optq/core": "workspace:*",
+    "idb": "^8.0.0"
+  },
+  "scripts": {
+    "build": "rimraf dist && tsc --build && esbuild --minify dist/**/*.js --outdir=dist --allow-overwrite"
+  }
+}
