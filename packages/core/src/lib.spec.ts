@@ -3,14 +3,14 @@ import SuperJSON from "superjson";
 import objectHash from "object-hash";
 
 import { createOptq } from "./lib.js";
-import type { OptqApiType, OptqConfig } from "./types.js";
+import type { OptqApi, OptqConfig } from "./types.js";
 
 function clone<T>(x: T): T {
   return SuperJSON.parse(SuperJSON.stringify(x));
 }
 
 describe("Simple test cases", () => {
-  type Api = OptqApiType<{
+  type Api = OptqApi<{
     responseHeaders: {
       "x-responded-at": string;
     };
@@ -142,8 +142,8 @@ describe("Simple test cases", () => {
     await promise;
 
     // The cache data is set
-    expect(opt.cacheStore["/users/:userId/version"]!["my-user"].value).toBe(2025);
-    expect(opt.cacheStore["/users/:userId/version"]!["my-user"].respondedAt).toBe(2024n);
+    expect(opt.cacheStore["/users/:userId/version"]!["my-user"]!.value).toBe(2025);
+    expect(opt.cacheStore["/users/:userId/version"]!["my-user"]!.respondedAt).toBe(2024n);
 
     // The request is removed from the requestStore
     // because every action it creates is not newer than corresponding cache data
@@ -313,7 +313,7 @@ describe("Simple test cases", () => {
 });
 
 describe("Complex flows", () => {
-  type Api = OptqApiType<{
+  type Api = OptqApi<{
     responseHeaders: {
       "x-responded-at": string;
     };

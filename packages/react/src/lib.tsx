@@ -1,14 +1,11 @@
-import type {
+import {
+  GetRoutes,
   Optq,
-  OptqAdditionalApiTypeKeys,
-  OptqApiBase,
-  OptqGetResponse,
-  OptqParams,
+  OptqGetRouteConfig,
   OptqPredictionStore,
-  OptqRequestHeaders,
-  OptqResourceData,
-  OptqResourceId,
-  OptqResponseHeaders,
+  OptqResponse,
+  OptqTypeUtil as Util,
+  getGetter,
 } from "@optq/core";
 import {
   QueryClientProvider,
@@ -20,8 +17,6 @@ import objectHash from "object-hash";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { subscribe, useSnapshot } from "valtio";
 
-import { getDefaultRespondedAt, getGetterInner, internalFetch } from "./internal.js";
-
 export type OptqRequestStats = {
   completed: number;
   offline: number;
@@ -30,29 +25,27 @@ export type OptqRequestStats = {
   ratio: number;
 };
 
-type UseOptqQueryArgument<Api extends OptqApiBase<Api>, ResId extends OptqResourceId<Api>> = {
-  resourceId: ResId;
-  headers?: OptqRequestHeaders<Api, `GET ${ResId}` & Exclude<keyof Api, OptqAdditionalApiTypeKeys>>;
-} & PrettifyOptional<{
-  params: EmptyToUndefined<
-    OptqParams<Api, `GET ${ResId}` & Exclude<keyof Api, OptqAdditionalApiTypeKeys>>
-  >;
+type UseOptqQueryArgument<Api extends { OPTQ_VALIDATED: true }, G extends GetRoutes<Api>> = {
+  resourceId: Util.ExtractPath<G>;
+} & Util.PrettifyOptional<{
+  headers: Util.PickOr<Api[G], "requestHeaders", never> & Util.PickOr<Api, "requestHeaders", never>;
+  params: Util.Equals<Util.PickOr<Api[G], "params", {}>, {}> extends true
+    ? undefined
+    : Util.PickOr<Api[G], "params", never>;
 }> &
   Omit<UseQueryOptions, "queryKey" | "queryFn">;
 
-export type UseOptq<Api extends OptqApiBase<Api>> = Optq<Api> & {
-  useQuery: <ResId extends OptqResourceId<Api>>(
-    // @ts-ignore
-    arg: UseOptqQueryArgument<Api, ResId>,
-  ) => UseQueryResult<OptqResourceData<Api, ResId>> & {
-    // @ts-ignore
-    last: OptqGetResponse<Api, ResId>;
+export type UseOptq<Api extends { OPTQ_VALIDATED: true }> = Optq<Api> & {
+  useQuery: <G extends GetRoutes<Api>>(
+    arg: UseOptqQueryArgument<Api, G>,
+  ) => UseQueryResult<Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>> & {
+    last: OptqResponse<Api, G>;
   };
 };
 
-const OptqContext = createContext(undefined);
+const OptqContext = createContext<any>(undefined);
 
-export function OptqProvider<Api extends OptqApiBase<Api>>({
+export function OptqProvider<Api extends { OPTQ_VALIDATED: true }>({
   children,
   value,
 }: {
@@ -60,70 +53,52 @@ export function OptqProvider<Api extends OptqApiBase<Api>>({
   value: Optq<Api>;
 }) {
   return (
-    // @ts-ignore
     <OptqContext.Provider value={value}>
+      {/* @ts-ignore */}
       <QueryClientProvider client={value.queryClient}>{children}</QueryClientProvider>
     </OptqContext.Provider>
   );
 }
 
-export function useOptq<Api extends OptqApiBase<Api>>(): UseOptq<Api> {
+export function useOptq<Api extends { OPTQ_VALIDATED: true }>(): UseOptq<Api> {
   const optq = useContext(OptqContext) as unknown as Optq<Api>;
   if (!optq) {
     throw new Error("Missing OptqProvider");
   }
 
   const useOptqQuery = useCallback(
-    <ResId extends OptqResourceId<Api>>({
+    <G extends GetRoutes<Api>>({
       resourceId,
       params,
       headers,
       ...options
-      // @ts-ignore
-    }: UseOptqQueryArgument<Api, ResId>) => {
-      type ApiId = `GET ${ResId}` & Exclude<keyof Api, OptqAdditionalApiTypeKeys>;
-      const apiId = `GET ${resourceId}` as ApiId;
-
-      const route = optq.config.routes?.[apiId];
-      const hashFn = route?.hash ?? objectHash;
-      const get = getGetterInner(optq);
-
-      const { data: last, ...rest } = useQuery({
-        // @ts-ignore
-        queryKey: [resourceId, hashFn(params ?? {})],
-        queryFn: async () => {
-          const response = await internalFetch<
-            OptqResourceData<Api, ResId>,
-            OptqResponseHeaders<Api, ApiId>
-          >({
-            baseUrl: optq.config?.baseUrl ?? "",
-            method: "GET",
-            path: resourceId,
-            // @ts-ignore
-            params,
-            // @ts-ignore
-            headers,
-          });
-          if (response.ok) {
-            const respondedAt =
-              // @ts-ignore
-              route?.respondedAt?.(response) ??
-              optq.config?.respondedAt?.(response) ??
-              // @ts-ignore
-              getDefaultRespondedAt(response);
-            // @ts-ignore
-            optq.set(resourceId, params, response.data!, respondedAt);
-          }
-          return response;
-        },
-        ...options,
-      });
+    }: UseOptqQueryArgument<Api, G>) => {
+      const apiId = `GET ${resourceId}` as G;
+      const route = optq.config?.routes?.[apiId] as OptqGetRouteConfig<Api, G> | undefined;
+      const hashFn = (route?.hash ?? objectHash) as (
+        params: Util.PickOr<Api[G], "params", {}>,
+      ) => string;
+      const hash = hashFn((params ?? {}) as Util.PickOr<Api[G], "params", {}>);
 
       const predictionSnapshot = useSnapshot(optq.predictionStore);
 
+      const { data: last, ...rest } = useQuery({
+        queryKey: [resourceId, hash],
+        queryFn: () => optq.fetch(resourceId, params as any, headers as any),
+        ...options,
+      });
+
+      const get = useMemo(
+        () =>
+          getGetter({
+            config: optq.config,
+            predictionStore: predictionSnapshot as OptqPredictionStore<Api>,
+          }),
+        [optq, predictionSnapshot],
+      );
+
       const data = useMemo(() => {
-        // @ts-ignore
-        return get(predictionSnapshot as OptqPredictionStore<Api>, resourceId, params);
+        return get(resourceId, params as any);
       }, [get, predictionSnapshot, resourceId, params]);
 
       return { data, last, ...rest };
@@ -138,7 +113,7 @@ export function useOptq<Api extends OptqApiBase<Api>>(): UseOptq<Api> {
   };
 }
 
-export function useOptqRequestStats<Api extends OptqApiBase<Api>>(
+export function useOptqRequestStats<Api extends { OPTQ_VALIDATED: true }>(
   optq: Pick<Optq<Api>, "requestStore">,
   options: { debounce: number } = { debounce: 1000 },
 ) {
@@ -149,8 +124,10 @@ export function useOptqRequestStats<Api extends OptqApiBase<Api>>(
     total: 0,
     ratio: 0,
   });
+
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout> | undefined;
+
     return subscribe(optq.requestStore, (ops) => {
       if (optq.requestStore.length === 0) {
         timeout = setTimeout(() => {
@@ -202,7 +179,7 @@ export function useOptqRequestStats<Api extends OptqApiBase<Api>>(
             offline,
             pending,
             total: s.total,
-            ratio: (s.total - pending - offline) / s.total,
+            ratio: (s.total - pending - offline) / Math.max(1, s.total),
           };
         });
       }
@@ -211,22 +188,3 @@ export function useOptqRequestStats<Api extends OptqApiBase<Api>>(
 
   return requestStats;
 }
-
-// biome-ignore lint/complexity/noBannedTypes: Empty object type is needed here
-type EmptyObject = {};
-type Equals<X, Y> = (<T>() => T extends X ? 1 : 2) extends <T>() => T extends Y ? 1 : 2
-  ? true
-  : false;
-type Prettify<T> = {
-  [K in keyof T]: T[K];
-} & {};
-type ExtractConcrete<T> = {
-  [K in keyof T as undefined extends T[K]
-    ? never
-    : Equals<T[K], never> extends true
-      ? never
-      : K]: T[K];
-} & {};
-
-type EmptyToUndefined<T> = Equals<T, EmptyObject> extends true ? undefined : T;
-type PrettifyOptional<T> = Prettify<ExtractConcrete<T> & Partial<T>>;

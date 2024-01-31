@@ -5,11 +5,12 @@
   "version": "0.1.0",
   "description": "OptQ is a library for optimistic data queries in JavaScript.",
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "examples/*"
   ],
   "devDependencies": {
     "@biomejs/biome": "^1.5.3",
-    "esbuild": "^0.19.12",
+    "esbuild": "^0.20.0",
     "lerna": "^8.0.2",
     "rimraf": "^5.0.5",
     "typescript": "^5.3.3",

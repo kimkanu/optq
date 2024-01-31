@@ -2,22 +2,21 @@
   "$schema": "https://json.schemastore.org/package",
   "name": "@optq/core",
   "type": "module",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "The core library for OptQ.",
   "exports": {
     ".": "./dist/index.js",
     "./package.json": "./package.json"
   },
-  "files": [
-    "dist",
-    "src"
-  ],
+  "files": ["dist"],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "dependencies": {
-    "@tanstack/query-core": "^5.17.19",
     "nanoid": "^5.0.4",
-    "object-hash": "^3.0.0",
+    "object-hash": "^3.0.0"
+  },
+  "peerDependencies": {
+    "@tanstack/query-core": "^5.17.19",
     "valtio": "^1.13.0"
   },
   "devDependencies": {

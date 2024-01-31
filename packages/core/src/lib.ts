@@ -1,33 +1,40 @@
+// @ts-nocheck
+
 import { QueryClient, onlineManager, focusManager } from "@tanstack/query-core";
 import { nanoid } from "nanoid/non-secure";
 import objectHash from "object-hash";
 import { proxy } from "valtio/vanilla";
 
-import { getDefaultRespondedAt, getGetterInner, internalFetch } from "./internal.js";
 import type {
-  Method,
+  Http,
+  Util,
   Optq,
-  OptqAdditionalApiTypeKeys,
-  OptqApiBase,
   OptqCacheStore,
   OptqConfig,
   OptqGetter,
-  OptqMutationRouteConfig,
+  OptqFetcher,
   OptqMutator,
-  OptqParams,
   OptqPredictionStore,
   OptqRequest,
   OptqRequestStore,
-  OptqResourceData,
-  OptqResourceId,
-  OptqResourceRouteConfig,
   OptqResponse,
   OptqSetter,
   PendingResponseResult,
+  GetRoutes,
+  OptqGetRouteConfig,
+  OptqGetterOptionalParam,
+  OptqFetcherOptionalParams,
+  OptqResponseHeaders,
+  OptqRequestHeaders,
+  MutationRoutes,
+  OptqMutationRouteConfig,
+  OptqRequestStoreDistribute,
 } from "./types.js";
 
-export function createOptq<Api extends OptqApiBase<Api>>(config: OptqConfig<Api>): Optq<Api> {
-  const queryClient = config?.queryClient ?? new QueryClient();
+export function createOptq<Api extends { OPTQ_VALIDATED: true }>(
+  config: OptqConfig<Api>,
+): Optq<Api> {
+  const queryClient = config.queryClient ?? new QueryClient();
 
   const requestStore = proxy<OptqRequestStore<Api>>([]);
   const cacheStore = proxy<OptqCacheStore<Api>>({});
@@ -35,6 +42,7 @@ export function createOptq<Api extends OptqApiBase<Api>>(config: OptqConfig<Api>
 
   const set = getSetter({ config, requestStore, cacheStore, predictionStore });
   const get = getGetter({ config, predictionStore });
+  const fetch = getFetcher({ config, set });
   const mutate = getMutator({ config, requestStore, cacheStore, predictionStore, set });
 
   const becameOnline = new Promise<void>((resolve) => {
@@ -46,7 +54,6 @@ export function createOptq<Api extends OptqApiBase<Api>>(config: OptqConfig<Api>
       }
     });
   });
-
   const pendingResponses = becameOnline.then(async () => {
     if (config?.resumeRequestMode === "sequential") {
       const responses: PendingResponseResult<Api>[] = [];
@@ -54,8 +61,7 @@ export function createOptq<Api extends OptqApiBase<Api>>(config: OptqConfig<Api>
         if (!request.waitingNetwork) continue;
         request.waitingNetwork = false;
         try {
-          // @ts-ignore: giving up to type this
-          const response = (await mutate(request)) as Res;
+          const response = await mutate(request);
           responses.push({ status: "fulfilled", value: { request, response } });
         } catch (e) {
           responses.push({ status: "rejected", value: { request }, reason: e });
@@ -70,8 +76,7 @@ export function createOptq<Api extends OptqApiBase<Api>>(config: OptqConfig<Api>
         .map(async (request): Promise<PendingResponseResult<Api>> => {
           request.waitingNetwork = false;
           try {
-            // @ts-ignore: giving up to type this
-            const response = (await mutate(request)) as Res;
+            const response = await mutate(request);
             return { status: "fulfilled", value: { request, response } };
           } catch (e) {
             return { status: "rejected", value: { request }, reason: e };
@@ -102,6 +107,7 @@ export function createOptq<Api extends OptqApiBase<Api>>(config: OptqConfig<Api>
     predictionStore,
     set,
     get,
+    fetch,
     mutate,
     pendingResponses,
   };
@@ -109,78 +115,157 @@ export function createOptq<Api extends OptqApiBase<Api>>(config: OptqConfig<Api>
   return optq;
 }
 
-function getSetter<Api extends OptqApiBase<Api>>(optq: {
+export function getSetter<Api extends { OPTQ_VALIDATED: true }>(optq: {
   config: OptqConfig<Api>;
   requestStore: OptqRequestStore<Api>;
   cacheStore: OptqCacheStore<Api>;
   predictionStore: OptqPredictionStore<Api>;
 }): OptqSetter<Api> {
-  return <ResId extends OptqResourceId<Api>>(
-    resourceId: ResId & keyof OptqCacheStore<Api>,
-    params: OptqParams<Api, `GET ${ResId}` & Exclude<keyof Api, OptqAdditionalApiTypeKeys>>,
-    value: OptqResourceData<Api, ResId>,
+  return <G extends GetRoutes<Api>>(
+    resourceId: Util.ExtractPath<G>,
+    params: Util.PickOr<Api[G], "params", {} | null | undefined>,
+    value: Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>,
     respondedAt: number | bigint,
   ) => {
-    type ApiId = `GET ${ResId}` & Exclude<keyof Api, OptqAdditionalApiTypeKeys>;
-    const apiId = `GET ${resourceId}` as ApiId;
-
-    const route = optq.config?.routes?.[apiId];
-    const hashFn = (route?.hash ?? objectHash) as (params: OptqParams<Api, ApiId>) => string;
-    const hash = hashFn(params);
+    const apiId = `GET ${resourceId}` as G;
+    const route = optq.config?.routes?.[apiId] as OptqGetRouteConfig<Api, G> | undefined;
+    const hashFn = (route?.hash ?? objectHash) as (
+      params: Util.PickOr<Api[G], "params", {}>,
+    ) => string;
+    const hash = hashFn((params ?? {}) as Util.PickOr<Api[G], "params", {}>);
 
     // If the cache is strictly newer (larger respondedAt) than the response,
     // do not update the cache
-    const prevRespondedAt = optq.cacheStore[resourceId]?.[hash]?.respondedAt;
+    const prevRespondedAt: number | bigint | undefined =
+      optq.cacheStore[resourceId]?.[hash]?.respondedAt;
     if (prevRespondedAt === undefined || prevRespondedAt <= respondedAt) {
-      optq.cacheStore[resourceId] = optq.cacheStore[resourceId] ?? {};
-
-      // @ts-expect-error: temporary empty object
-      optq.cacheStore[resourceId][hash] ??= {};
-      // @ts-ignore: silly typescript
-      optq.cacheStore[resourceId]![hash].value = value;
-      optq.cacheStore[resourceId]![hash].respondedAt = respondedAt;
+      optq.cacheStore[resourceId] ??= {};
+      optq.cacheStore[resourceId][hash] = { value, respondedAt };
     }
 
-    // @ts-ignore: silly typescript
-    invalidatePrediction(optq, resourceId, hash, hashFn);
+    invalidatePrediction(optq, resourceId, hash);
   };
 }
 
-function getGetter<Api extends OptqApiBase<Api>>(optq: {
+export function getGetter<Api extends { OPTQ_VALIDATED: true }>(optq: {
   config: OptqConfig<Api>;
   predictionStore: OptqPredictionStore<Api>;
 }): OptqGetter<Api> {
-  const get = getGetterInner<Api>(optq);
-  // @ts-ignore: giving up to type this
-  return <ResId extends OptqResourceId<Api>>(
-    resourceId: ResId,
-    params: Parameters<OptqGetter<Api>>[1],
+  return <G extends GetRoutes<Api>>(
+    resourceId: Util.ExtractPath<G>,
+    ...optionalParams: OptqGetterOptionalParam<Api, G>
   ) => {
-    // @ts-ignore: silly typescript
-    return get<ResId>(optq.predictionStore, resourceId, params);
+    const [params] = optionalParams;
+
+    const apiId = `GET ${resourceId}` as G;
+    const route = optq.config.routes?.[apiId] as OptqGetRouteConfig<Api, G> | undefined;
+
+    if (!route) return undefined;
+
+    const hashFn = (route?.hash ?? objectHash) as (
+      params: Util.PickOr<Api[G], "params", {}>,
+    ) => string;
+    const hash = hashFn((params ?? {}) as Util.PickOr<Api[G], "params", {}>);
+
+    const prediction: Util.Optional<
+      Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>
+    > = optq.predictionStore[resourceId]?.[hash];
+    if (prediction !== undefined) return prediction;
+
+    if (typeof route.defaultValue === "function") {
+      return (
+        route.defaultValue as (
+          params: Util.PickOr<Api[G], "params", never>,
+        ) => Util.Optional<
+          Exclude<Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>, Function>
+        >
+      )(params as Util.PickOr<Api[G], "params", never>);
+    }
+    return route.defaultValue;
   };
 }
 
-function getMutator<Api extends OptqApiBase<Api>>(optq: {
+export function getFetcher<Api extends { OPTQ_VALIDATED: true }>(optq: {
+  config: OptqConfig<Api>;
+  set: OptqSetter<Api>;
+}): OptqFetcher<Api> {
+  return async <G extends GetRoutes<Api>>(
+    resourceId: Util.ExtractPath<G>,
+    ...optionalParams: OptqFetcherOptionalParams<Api, G>
+  ) => {
+    const [params, headers] = optionalParams;
+
+    const apiId = `GET ${resourceId}` as G;
+    const route = optq.config.routes?.[apiId] as Util.Optional<
+      OptqGetRouteConfig<Api, G> & {
+        transform?: (
+          response: Util.Prettify<
+            OptqResponse<Api, G> & {
+              ok: true;
+              params: Util.PickOr<Api[G], "params", never>;
+              request: { headers: OptqRequestHeaders<Api, G> };
+              respondedAt: bigint | number;
+            }
+          >,
+        ) => Util.PickOr<Api[G], "resource", never>;
+      }
+    >;
+
+    const response = (await internalFetch<
+      Util.PickOr<Api[G], "data", never>,
+      OptqResponseHeaders<Api, G>
+    >({
+      baseUrl: optq.config?.baseUrl ?? "",
+      method: "GET",
+      path: resourceId,
+      params,
+      headers,
+    })) as OptqResponse<Api, G>;
+    if (response.ok) {
+      const respondedAt =
+        route?.respondedAt?.(response) ??
+        optq.config?.respondedAt?.(response) ??
+        getDefaultRespondedAt(response);
+      const transformPayload = {
+        ...response,
+        params,
+        request: { headers },
+        respondedAt,
+      } as Util.Prettify<
+        OptqResponse<Api, G> & {
+          ok: true;
+          params: Util.PickOr<Api[G], "params", never>;
+          request: { headers: OptqRequestHeaders<Api, G> };
+          respondedAt: bigint | number;
+        }
+      >;
+      const data = route?.transform?.(transformPayload) ?? response.data;
+      optq.set(
+        resourceId,
+        params as Util.PickOr<Api[G], "params", never>,
+        data as Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>,
+        respondedAt,
+      );
+    }
+    return response;
+  };
+}
+
+export function getMutator<Api extends { OPTQ_VALIDATED: true }>(optq: {
   config: OptqConfig<Api>;
   requestStore: OptqRequestStore<Api>;
   cacheStore: OptqCacheStore<Api>;
   predictionStore: OptqPredictionStore<Api>;
   set: OptqSetter<Api>;
 }): OptqMutator<Api> {
-  // @ts-ignore
-  return async function <
-    ApiId extends Exclude<keyof Api, OptqAdditionalApiTypeKeys> &
-      `${Exclude<Method, "GET">} ${string}`,
-  >({
+  return async function <R extends MutationRoutes<Api>>({
     id = nanoid(),
     apiId,
     params,
     headers,
     body,
-  }: Omit<OptqRequest<Api, ApiId>, "id"> & { id?: string }) {
-    type M = ApiId extends `${infer M extends Exclude<Method, "GET">} ${string}` ? M : never;
-    type Res = OptqResponse<Api, ApiId & `${M} ${string}`> & {
+  }: Omit<OptqRequest<Api, R>, "id"> & { id?: string }) {
+    type Res = OptqResponse<Api, R> & {
       status: number;
       ok: boolean;
       data?: unknown;
@@ -200,25 +285,21 @@ function getMutator<Api extends OptqApiBase<Api>>(optq: {
       DEBUG_DELAY = arguments[2] ?? 100;
     }
 
-    const route = optq.config?.routes?.[apiId] as
-      | OptqMutationRouteConfig<Api, M, ApiId & `${M} ${string}`>
-      | undefined;
+    const route = optq.config?.routes?.[apiId] as Util.Optional<OptqMutationRouteConfig<Api, R>>;
     const request = { id, apiId, params, headers, body };
 
     const affectedPredictions: [string, string][] = [];
-    const markAffectedPredictions = <ResId extends OptqResourceId<Api>>(
-      resourceId: ResId,
-      params: OptqParams<Api, `GET ${ResId}` & Exclude<keyof Api, OptqAdditionalApiTypeKeys>>,
+    const markAffectedPredictions = <G extends GetRoutes<Api>>(
+      resourceId: Util.ExtractPath<G>,
+      params: Util.PickOr<Api[G], "params", {} | null | undefined>,
     ) => {
-      type ApiId = `GET ${ResId}` & Exclude<keyof Api, OptqAdditionalApiTypeKeys>;
-      const apiId = `GET ${resourceId}` as ApiId;
+      const apiId = `GET ${resourceId}` as G;
 
-      const route = optq.config?.routes?.[apiId] as
-        | OptqResourceRouteConfig<Api, ApiId, ResId>
-        | undefined;
-      const hashFn = route?.hash ?? objectHash;
-      // @ts-ignore: silly typescript
-      const hash = hashFn(params ?? {});
+      const route = optq.config?.routes?.[apiId] as Util.Optional<OptqGetRouteConfig<Api, G>>;
+      const hashFn = (route?.hash ?? objectHash) as (
+        params: Util.PickOr<Api[G], "params", {}>,
+      ) => string;
+      const hash = hashFn((params ?? {}) as Util.PickOr<Api[G], "params", {}>);
 
       for (const [otherResourceId, otherHash] of affectedPredictions) {
         if (resourceId === otherResourceId && hash === otherHash) return;
@@ -228,22 +309,19 @@ function getMutator<Api extends OptqApiBase<Api>>(optq: {
     };
 
     if (!optq.requestStore.some((request) => request.id === id)) {
-      // @ts-ignore: giving up to type this
       optq.requestStore.push({
         ...request,
         waitingNetwork: !onlineManager.isOnline(),
         affectedPredictions,
-      });
-      // @ts-ignore: giving up to type this
+      } as OptqRequestStoreDistribute<Api, R>);
       route?.actions?.({ ...request, set: markAffectedPredictions });
 
       for (const [resourceId, hash] of affectedPredictions) {
-        // @ts-ignore: giving up to type this
-        invalidatePrediction(optq, resourceId, hash);
+        invalidatePrediction(optq, resourceId as Util.ExtractPath<GetRoutes<Api>>, hash);
       }
     }
 
-    const method = apiId.slice(0, apiId.indexOf(" ")) as M;
+    const method = apiId.slice(0, apiId.indexOf(" ")) as Http.Method;
     const promise = CREATE_DEBUG_RESPONSE
       ? new Promise<void>((r) => setTimeout(() => r(), DEBUG_DELAY)).then(CREATE_DEBUG_RESPONSE)
       : new Promise<void>((r) => {
@@ -260,25 +338,21 @@ function getMutator<Api extends OptqApiBase<Api>>(optq: {
           });
         }).then(
           () =>
-            internalFetch({
+            internalFetch<Util.PickOr<Api[R], "data", never>, OptqResponseHeaders<Api, R>>({
               baseUrl: optq.config?.baseUrl ?? "",
               method,
               path: apiId.slice(method.length + 1),
-              // @ts-ignore
               params,
-              // @ts-ignore
               headers,
               body,
-            }) as unknown as Promise<Res>,
+            }) as Promise<OptqResponse<Api, R>>,
         );
 
     return promise
       .then((response) => {
         const respondedAt =
           route?.respondedAt?.(response) ??
-          // @ts-ignore: giving up to type this
           optq.config?.respondedAt?.(response) ??
-          // @ts-ignore: giving up to type this
           getDefaultRespondedAt(response);
 
         const requestIndex = optq.requestStore.findIndex((request) => request.id === id);
@@ -286,7 +360,6 @@ function getMutator<Api extends OptqApiBase<Api>>(optq: {
           optq.requestStore[requestIndex].respondedAt = respondedAt;
         }
 
-        // @ts-ignore: giving up to type this
         route?.onResponse?.({
           respondedAt,
           params,
@@ -294,7 +367,6 @@ function getMutator<Api extends OptqApiBase<Api>>(optq: {
           ok: response.ok,
           headers: response.headers,
           data: response.data,
-          // @ts-ignore: giving up to type this
           set: (r, p, d) => optq.set(r, p, d, respondedAt),
           request,
           removeRequest() {
@@ -328,75 +400,72 @@ function getMutator<Api extends OptqApiBase<Api>>(optq: {
   };
 }
 
-function invalidatePrediction<Api extends OptqApiBase<Api>, ResId extends OptqResourceId<Api>>(
+function invalidatePrediction<Api extends { OPTQ_VALIDATED: true }, G extends GetRoutes<Api>>(
   optq: {
     config: OptqConfig<Api>;
     requestStore: OptqRequestStore<Api>;
     cacheStore: OptqCacheStore<Api>;
     predictionStore: OptqPredictionStore<Api>;
   },
-  resourceId: ResId & keyof OptqCacheStore<Api>,
+  resourceId: Util.ExtractPath<G>,
   hash: string,
-  hashFn_?: (
-    params: OptqParams<Api, `GET ${ResId}` & Exclude<keyof Api, OptqAdditionalApiTypeKeys>>,
-  ) => string,
 ) {
-  type ApiId = `GET ${ResId}` & Exclude<keyof Api, OptqAdditionalApiTypeKeys>;
-  const apiId = `GET ${resourceId}` as ApiId;
-
-  let hashFn = hashFn_;
-  if (!hashFn) {
-    const route = optq.config.routes?.[apiId];
-    // @ts-ignore: silly typescript
-    hashFn = route?.hash ?? objectHash;
-  }
+  const apiId = `GET ${resourceId}` as G;
+  const route = optq.config.routes?.[apiId] as OptqGetRouteConfig<Api, G> | undefined;
+  const hashFn = (route?.hash ?? objectHash) as (
+    params: Util.PickOr<Api[G], "params", {}>,
+  ) => string;
 
   optq.predictionStore[resourceId] ??= {};
-  // @ts-ignore: silly typescript
   optq.predictionStore[resourceId][hash] = optq.cacheStore[resourceId]?.[hash]?.value;
 
-  for (
-    let i = 0, n = optq.requestStore.length, req = optq.requestStore[i];
-    i < n;
-    req = optq.requestStore[++i]
-  ) {
-    req.affectedPredictions = [];
+  for (const request of optq.requestStore) {
+    request.affectedPredictions = [];
 
     // Update prediction only if either `request` is not responded (`request.respondedAt === undefined`)
     //                           or `request.respondedAt` is strictly newer (larger) than `cache.respondedAt`
-    const set = <OtherResId extends OptqResourceId<Api>>(
-      otherResourceId: OtherResId,
-      params: OptqParams<Api, `GET ${OtherResId}` & Exclude<keyof Api, OptqAdditionalApiTypeKeys>>,
+    const set = <H extends GetRoutes<Api>>(
+      otherResourceId: Util.ExtractPath<H>,
+      params: Util.PickOr<Api[H], "params", {} | null | undefined>,
       update:
-        | (OptqResourceData<Api, OtherResId> | undefined)
+        | Util.Optional<Util.PickOr<Api[H], "resource", Util.PickOr<Api[H], "data", never>>>
         | ((
-            prev: OptqResourceData<Api, OtherResId> | undefined,
-          ) => OptqResourceData<Api, OtherResId> | undefined),
+            prev: Util.Optional<
+              Util.PickOr<Api[H], "resource", Util.PickOr<Api[H], "data", never>>
+            >,
+          ) => Util.Optional<Util.PickOr<Api[H], "resource", Util.PickOr<Api[H], "data", never>>>),
     ) => {
       // Check if we are setting the prediction for the same resource
-      if (
-        (otherResourceId as OptqResourceId<Api>) !== resourceId ||
-        hash !== hashFn!(params as unknown as Parameters<Exclude<typeof hashFn, undefined>>[0])
-      )
-        return;
+      function isSameResource(
+        otherResourceId: Util.ExtractPath<H>,
+      ): otherResourceId is Util.ExtractPath<G> & Util.ExtractPath<H> {
+        return (
+          (otherResourceId as unknown) === resourceId &&
+          hash === hashFn(params as unknown as Parameters<typeof hashFn>[0])
+        );
+      }
+      if (!isSameResource(otherResourceId)) return;
 
       if (
-        req.respondedAt !== undefined &&
+        request.respondedAt !== undefined &&
         optq.cacheStore?.[resourceId]?.[hash].respondedAt !== undefined &&
-        req.respondedAt <= optq.cacheStore[resourceId]![hash].respondedAt
+        request.respondedAt <= optq.cacheStore[resourceId]![hash].respondedAt
       ) {
         return;
       }
-      const newValue =
-        // @ts-ignore: giving up to type this
-        typeof update === "function" ? update(optq.predictionStore[resourceId][hash]) : update;
 
-      // @ts-ignore: silly typescript
+      type UpdateFn = (
+        prev: Util.Optional<Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>>,
+      ) => Util.Optional<Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>>;
+      const newValue =
+        typeof update !== "function"
+          ? update
+          : (update as UpdateFn)(optq.predictionStore[resourceId][hash]);
+
       optq.predictionStore[resourceId][hash] = newValue;
-      req.affectedPredictions!.push([resourceId, hash]);
+      request.affectedPredictions!.push([resourceId, hash]);
     };
-    // @ts-ignore: giving up to type this
-    optq.config.routes?.[req.apiId]?.actions?.({ ...req, set });
+    optq.config.routes?.[request.apiId]?.actions?.({ ...request, set });
   }
 
   // Remove resolved requests
@@ -405,4 +474,91 @@ function invalidatePrediction<Api extends OptqApiBase<Api>, ResId extends OptqRe
       optq.requestStore.splice(i, 1);
     }
   }
+}
+
+async function internalFetch<D, H>({
+  baseUrl,
+  method,
+  path,
+  params,
+  headers,
+  body,
+}: {
+  baseUrl: string;
+  method: Http.Method;
+  path: string;
+  params?: unknown;
+  headers?: unknown;
+  body?: unknown;
+}) {
+  let url = /^https?:\/\//.test(path) ? path : baseUrl + path;
+  {
+    const searchParams = new URLSearchParams();
+    for (const [key, value] of Object.entries(params ?? {})) {
+      if (value === undefined || value === null) continue;
+      const regex = new RegExp(`:${key}(?=/|$)`, "g");
+      if (regex.test(url)) {
+        url = url.replace(regex, (value as string | number).toString());
+      } else {
+        searchParams.append(key, (value as string | number).toString());
+      }
+    }
+    const stringifiedSearchParams = searchParams.toString();
+    url += `${stringifiedSearchParams ? "?" : ""}${stringifiedSearchParams}`;
+  }
+
+  const isBodyJson =
+    body === undefined
+      ? true
+      : typeof body === "object" && (body === null || body.constructor === Object);
+  const isBodyText = body === undefined ? false : typeof body === "string";
+  const isBodyFormData = body === undefined ? false : body instanceof FormData;
+
+  const response = await fetch(url, {
+    method,
+    headers: {
+      "content-type": isBodyJson
+        ? "application/json"
+        : isBodyText
+          ? "text/plain"
+          : isBodyFormData
+            ? "multipart/form-data"
+            : "application/octet-stream",
+      ...(headers as object),
+    },
+    body:
+      body === undefined
+        ? undefined
+        : isBodyJson
+          ? JSON.stringify(body)
+          : (body as BodyInit | null | undefined),
+  });
+
+  const contentType = response.headers.get("content-type");
+  const headersObject = Object.fromEntries(response.headers.entries()) as H;
+
+  let data: D | undefined;
+  try {
+    data = (
+      contentType?.includes("json")
+        ? await response.json()
+        : contentType?.startsWith("text/")
+          ? await response.text()
+          : await response.arrayBuffer()
+    ) as D;
+  } catch {
+    data = undefined;
+  }
+
+  return {
+    status: response.status,
+    ok: response.ok,
+    headers: headersObject,
+    data,
+    raw: response,
+  };
+}
+
+function getDefaultRespondedAt(response: { headers: any }) {
+  return BigInt(new Date(response.headers.date ?? Date.now()).getTime());
 }

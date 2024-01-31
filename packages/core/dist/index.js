@@ -1,1 +1,1 @@
-"use strict";export{createOptq}from"./lib.js";
+"use strict";export{createOptq,getGetter,getSetter,getFetcher,getMutator}from"./lib.js";

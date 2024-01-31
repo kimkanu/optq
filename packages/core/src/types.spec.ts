@@ -1,240 +1,311 @@
-import type {
-  AnyHeaders,
-  ErrorStatus,
-  OkStatus,
-  OptqApiType,
-  OptqConfig,
-  OptqResponse,
-} from "./types.js";
-
-type Equals<X, Y> = (<T>() => T extends X ? 1 : 2) extends <T>() => T extends Y ? 1 : 2
-  ? true
-  : false;
-type AssertTrue<A extends true> = A;
-
-type Prettify<T> = {
-  [K in keyof T]: T[K];
-} & {};
-type ExtractConcrete<T> = {
-  [K in keyof T as undefined extends T[K]
-    ? never
-    : Equals<T[K], never> extends true
-      ? never
-      : K]: T[K];
-} & {};
-type PrettifyOptional<T> = Prettify<ExtractConcrete<T> & Partial<T>>;
+import type { Optq, OptqApi, OptqConfig, Util } from "./types.js";
 
 type TestCases = [
-  // PrettifyOptional
-  AssertTrue<
-    Equals<
-      PrettifyOptional<{
-        a: string | undefined;
-        b: number | null;
-        c: never;
-        d: undefined;
-        e: object;
+  Util.Assert<
+    Util.Equals<
+      // @ts-expect-error: apiVersion is not an integer
+      OptqApi<{
+        apiVersion: "1.0.0";
       }>,
       {
-        a?: string | undefined;
-        b: number | null;
-        c?: never;
-        d?: undefined;
-        e: object;
+        error: {
+          apiVersion: "TypeError: apiVersion must be an integer";
+        };
       }
     >
   >,
-  //
-  // Valid API type
-  OptqApiType<{
-    responseHeaders: {
-      "x-responded-at": string;
-    };
-    params: {
-      v?: number;
-    };
-  }>,
-  //
-  // @ts-expect-error: invalid key in API type
-  OptqApiType<{
-    invalidKey: {
-      v?: number;
-    };
-  }>,
-  //
-  // Routes
-  OptqApiType<{
-    "GET /hello/world": {
-      params: {
-        v?: number;
-      };
-      data: { value: string };
-    };
-    "GET /:username": {
-      params: {
-        username: string;
-        v?: number;
-      };
-      data: { value: string };
-    };
-  }>,
-  //
-  // @ts-expect-error: Path params should be included in `params`
-  OptqApiType<{
-    "GET /hello/:username": {
-      params: {
-        v?: number;
-      };
-      data: { value: string };
-    };
-  }>,
-  //
-  // @ts-expect-error: GET routes cannot have body
-  OptqApiType<{
-    "GET /hello/world": {
-      params: {
-        v?: number;
-      };
-      data: { value: string };
-      body: string;
-    };
-  }>,
-  //
-  // @ts-expect-error: GET routes should have data
-  OptqApiType<{
-    "GET /hello/world": {
-      params: {
-        v?: number;
-      };
-    };
-  }>,
-  //
-  // @ts-expect-error: DELETE routes cannot have body
-  OptqApiType<{
-    "DELETE /hello/world": {
-      params: {
-        v?: number;
-      };
-      data: { value: string };
-      body: string;
-    };
-  }>,
-  //
-  // @ts-expect-error: DELETE routes cannot have body
-  OptqApiType<{
-    "DELETE /hello/world": {
-      params: {
-        v?: number;
-      };
-      data: { value: string };
-      body: string;
-    };
-  }>,
-  //
-  // OptqResponse<Api> has only one field: `headers`
-  AssertTrue<Equals<OptqResponse<Api>, { headers: Api["responseHeaders"] }>>,
-  //
-  // GET route
-  AssertTrue<
-    Equals<
-      OptqResponse<Api, "GET /:username">,
-      | {
-          headers: Api["responseHeaders"];
-          status: OkStatus;
-          ok: true;
-          data: Api["GET /:username"]["data"];
-        }
-      | {
-          headers: Api["responseHeaders"] & AnyHeaders;
-          status: ErrorStatus;
-          ok: false;
-          data?: unknown;
-        }
+  Util.Assert<
+    Util.Equals<
+      // @ts-expect-error: apiVersion is not an integer literal
+      OptqApi<{
+        apiVersion: 1 | 2;
+      }>,
+      {
+        error: {
+          apiVersion: "TypeError: apiVersion must be an integer literal";
+        };
+      }
     >
   >,
-  //
-  // PATCH route
-  AssertTrue<
-    Equals<
-      OptqResponse<Api, "PATCH /:username">,
-      | {
-          headers: {
-            "x-responded-at": string;
+  Util.Assert<
+    Util.Equals<
+      // @ts-expect-error: field names of requestHeaders should be in lowercase
+      OptqApi<{
+        requestHeaders: {
+          Authorization: string;
+        };
+      }>,
+      {
+        error: {
+          requestHeaders: {
+            Authorization: "TypeError: field name `Authorization` should be in lowercase";
           };
-          status: OkStatus;
-          ok: true;
-          data: {
-            username: string;
-            displayName: string;
+        };
+      }
+    >
+  >,
+  Util.Assert<
+    Util.Equals<
+      // @ts-expect-error: field names of responseHeaders should be in lowercase
+      OptqApi<{
+        responseHeaders: {
+          "X-Provided-By": string;
+        };
+      }>,
+      {
+        error: {
+          responseHeaders: {
+            "X-Provided-By": "TypeError: field name `X-Provided-By` should be in lowercase";
           };
-        }
-      | {
-          headers: {
-            "x-responded-at": string;
-          } & AnyHeaders;
-          status: 401;
-          ok: false;
-          data: { message: "Unauthorized" };
-        }
-      | {
-          headers: {
-            "x-responded-at": string;
-            "x-allowed-user-groups": string;
+        };
+      }
+    >
+  >,
+  Util.Assert<
+    Util.Equals<
+      // @ts-expect-error: every key of params should be either a string or a number
+      OptqApi<{
+        params: {
+          [Symbol.iterator]: string;
+        };
+      }>,
+      {
+        error: {
+          params: {
+            [Symbol.iterator]: "TypeError: parameter name is not a string or a number";
           };
-          status: 403;
-          ok: false;
-          data: { message: "Forbidden" };
-        }
-      | {
-          headers: {
-            "x-responded-at": string;
-          } & AnyHeaders;
-          status: 404;
-          ok: false;
-          data: unknown;
-        }
+        };
+      }
+    >
+  >,
+  Util.Assert<
+    Util.Equals<
+      // @ts-expect-error: every value of params should be string | number | bigint | boolean | undefined | null
+      OptqApi<{
+        params: {
+          hello: VoidFunction;
+        };
+      }>,
+      {
+        error: {
+          params: {
+            hello: "TypeError: value does not extend `string | number | bigint | boolean | undefined | null`";
+          };
+        };
+      }
+    >
+  >,
+  Util.Assert<
+    Util.Equals<
+      // @ts-expect-error: general routes; path params should be exhaustive
+      OptqApi<{
+        "GET /hello/:username/:today": {
+          params: {};
+        };
+      }>,
+      {
+        error: {
+          "GET /hello/:username/:today": {
+            params: {
+              username: "TypeError: missing parameter `username`";
+              today: "TypeError: missing parameter `today`";
+            };
+          };
+        };
+      }
+    >
+  >,
+  // @ts-expect-error: general routes; every key of params should be either a string or a number
+  OptqApi<{
+    "GET /hello/:username": {
+      params: {
+        [Symbol.iterator]: string;
+      };
+    };
+  }>,
+  Util.Assert<
+    Util.Equals<
+      // @ts-expect-error: general routes; every value of params should be string | number | bigint | boolean | undefined | null
+      OptqApi<{
+        "GET /hello/:username": {
+          params: {
+            username: [string, number];
+          };
+        };
+      }>,
+      {
+        error: {
+          "GET /hello/:username": {
+            params: {
+              username: "TypeError: value does not extend `string | number | bigint | boolean | undefined | null`";
+            };
+          };
+        };
+      }
+    >
+  >,
+  Util.Assert<
+    Util.Equals<
+      // @ts-expect-error: general routes; field names of requestHeaders should be in lowercase
+      OptqApi<{
+        "GET /hello": {
+          requestHeaders: {
+            Authorization: string;
+          };
+        };
+      }>,
+      {
+        error: {
+          "GET /hello": {
+            requestHeaders: {
+              Authorization: "TypeError: field name `Authorization` should be in lowercase";
+            };
+          };
+        };
+      }
+    >
+  >,
+  Util.Assert<
+    Util.Equals<
+      // @ts-expect-error: general routes; field names of requestHeaders should be in lowercase
+      OptqApi<{
+        "GET /hello": {
+          responseHeaders: {
+            "X-Provided-By": string;
+          };
+        };
+      }>,
+      {
+        error: {
+          "GET /hello": {
+            responseHeaders: {
+              "X-Provided-By": "TypeError: field name `X-Provided-By` should be in lowercase";
+            };
+          };
+        };
+      }
+    >
+  >,
+  Util.Assert<
+    Util.Equals<
+      // @ts-expect-error: general routes; error status should be of type Http.ErrorStatus
+      OptqApi<{
+        "GET /hello": {
+          error: { status: 101 } | { status: 400 };
+        };
+      }>,
+      {
+        error: {
+          "GET /hello": {
+            error: "TypeError: error status should be of type Http.ErrorStatus";
+          };
+        };
+      }
+    >
+  >,
+  Util.Assert<
+    Util.Equals<
+      // @ts-expect-error: general routes; fields other than params, body, requestHeaders, responseHeaders, data, resource, error are not allowed
+      OptqApi<{
+        "GET /hello": {
+          customField: string;
+          message: string;
+        };
+      }>,
+      {
+        error: {
+          "GET /hello": {
+            customField: "TypeError: fields other than params, body, requestHeaders, responseHeaders, data, resource, error are not allowed";
+            message: "TypeError: fields other than params, body, requestHeaders, responseHeaders, data, resource, error are not allowed";
+          };
+        };
+      }
+    >
+  >,
+  Util.Assert<
+    Util.Equals<
+      // @ts-expect-error: GET routes; data is missing
+      OptqApi<{
+        "GET /hello": {};
+      }>,
+      {
+        error: {
+          "GET /hello": {
+            data: "TypeError: data is missing";
+          };
+        };
+      }
+    >
+  >,
+  Util.Assert<
+    Util.Equals<
+      // @ts-expect-error: GET routes; body should not be defined
+      OptqApi<{
+        "GET /hello": {
+          data: string;
+          body: string;
+        };
+      }>,
+      {
+        error: {
+          "GET /hello": {
+            body: "TypeError: body should not be defined in GET routes";
+          };
+        };
+      }
+    >
+  >,
+  Util.Assert<
+    Util.Equals<
+      // @ts-expect-error: GET routes; body should not be defined
+      OptqApi<{
+        "DELETE /users/:userId": {
+          params: {
+            userId: string;
+          };
+          body: { displayName: string };
+        };
+      }>,
+      {
+        error: {
+          "DELETE /users/:userId": {
+            body: "TypeError: body should not be defined in DELETE routes";
+          };
+        };
+      }
     >
   >,
 ];
 
-type Api = OptqApiType<{
-  responseHeaders: {
-    "x-responded-at": string;
+type Api = OptqApi<{
+  "GET /hello": {
+    data: string;
+    resource: number;
   };
-  "GET /:username": {
+  "POST /hello": {
+    data: string;
+  };
+  "POST /hello/:username": {
     params: {
       username: string;
     };
-    data: {
-      username: string;
-      displayName: string;
-    };
-  };
-  "PATCH /:username": {
-    params: {
-      username: string;
-    };
-    body: {
-      displayName: string;
-    };
-    data: {
-      username: string;
-      displayName: string;
-    };
-    error:
-      | { status: 401; data: { message: "Unauthorized" } }
-      | {
-          status: 403;
-          headers: { "x-allowed-user-groups": string };
-          data: { message: "Forbidden" };
-        }
-      | {
-          status: 404;
-        };
+    data: string;
   };
 }>;
-const config: OptqConfig<Api> = {
-  respondedAt({ headers }) {
-    return BigInt(headers["x-responded-at"]);
+
+const _: OptqConfig<Api> = {
+  routes: {
+    "GET /hello": {
+      transform({ data }) {
+        return Number(data);
+      },
+    },
+    "POST /hello": {
+      onResponse({ ok, set, data }) {
+        if (ok) {
+          set("/hello", null, Number(data));
+        }
+      },
+    },
   },
 };

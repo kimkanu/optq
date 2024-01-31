@@ -1,76 +1,164 @@
 import type { QueryClient } from "@tanstack/query-core";
+export declare namespace Util {
+    export type Assert<T extends true> = T;
+    export type Equals<X, Y> = (<T>() => T extends X ? 1 : 2) extends <T>() => T extends Y ? 1 : 2 ? true : false;
+    export type Not<X> = Equals<X, false>;
+    type UnionToIntersection<U> = (U extends any ? (x: U) => void : never) extends (x: infer I) => void ? I : never;
+    export type IsUnion<T> = [T] extends [UnionToIntersection<T>] ? false : true;
+    export type Prettify<T> = {
+        [K in keyof T]: T[K];
+    } & {};
+    export type ValueOf<T> = T[keyof T];
+    export type PickOr<T, K extends string, D = never> = K extends keyof T ? T[K] : D;
+    type ExtractConcrete<T> = {
+        [K in keyof T as undefined extends T[K] ? never : Equals<T[K], never> extends true ? never : K]: T[K];
+    } & {};
+    export type PrettifyOptional<T> = Prettify<ExtractConcrete<T> & Partial<T>>;
+    export type Optional<T> = T | undefined;
+    export type NormalizeHeaders<T> = Prettify<{
+        [K in keyof T & string as T[K] extends string | undefined ? Lowercase<K> : never]: T[K];
+    }>;
+    export type ExtractPathParams<P extends string> = P extends `http${"" | "s"}://${infer Rest}` ? ExtractPathParams<`/${Rest}`> : P extends `${string}/:${infer Param}/${infer Rest}` ? Param | ExtractPathParams<`/${Rest}`> : P extends `${string}:${infer Param}` ? Param : never;
+    export type ExtractPath<R> = R extends `${Http.Method} ${infer P extends string}` ? P : never;
+    export {};
+}
+export declare namespace Http {
+    /**
+     * Supported HTTP methods type
+     */
+    type Method = "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
+    /**
+     * Supported HTTP ok status type
+     */
+    type OkStatus = 200 | 201 | 202 | 203 | 204 | 205 | 206 | 207 | 208 | 226;
+    /**
+     * Supported HTTP error status type
+     */
+    type ErrorStatus = 300 | 301 | 302 | 303 | 304 | 305 | 306 | 307 | 308 | 400 | 401 | 402 | 403 | 404 | 405 | 406 | 407 | 408 | 409 | 410 | 411 | 412 | 413 | 414 | 415 | 416 | 417 | 418 | 421 | 422 | 423 | 424 | 425 | 426 | 428 | 429 | 431 | 451 | 500 | 501 | 502 | 503 | 504 | 505 | 506 | 507 | 508 | 510 | 511;
+    /**
+     * Any headers
+     */
+    type AnyHeaders = Record<string, string | undefined>;
+}
 /**
- * Supported HTTP methods type
+ * OptqApi<Api>
  */
-export type Method = "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
-/**
- * Supported HTTP ok status type
- */
-export type OkStatus = 200 | 201 | 202 | 203 | 204 | 205 | 206 | 207 | 208 | 226;
-/**
- * Supported HTTP error status type
- */
-export type ErrorStatus = 300 | 301 | 302 | 303 | 304 | 305 | 306 | 307 | 308 | 400 | 401 | 402 | 403 | 404 | 405 | 406 | 407 | 408 | 409 | 410 | 411 | 412 | 413 | 414 | 415 | 416 | 417 | 418 | 421 | 422 | 423 | 424 | 425 | 426 | 428 | 429 | 431 | 451 | 500 | 501 | 502 | 503 | 504 | 505 | 506 | 507 | 508 | 510 | 511;
-/**
- * Any headers
- */
-export type AnyHeaders = Record<string, string | undefined>;
-export type ExtractPathParams<P extends string> = P extends `${string}:${infer Param}/${infer Rest}` ? Param | ExtractPathParams<`/${Rest}`> : P extends `${string}:${infer Param}` ? Param : never;
-type OptqErrorWrongApiTypeKeys<T> = ["OptqErrorWrongApiTypeKeys", T];
-type OptqErrorDataMissingInGetRoute<T> = ["OptqErrorDataMissingInGetRoute", T];
-/**
- * List of additional keys used in API type definition
- *
- * @example
- * ```ts
- * type Api = OptqApiType<{
- *   requestHeaders: { authorization: string };
- *   responseHeaders: { "x-responded-at": string };
- *   params: { version: number };
- *
- *   "GET /hello/:username": {
- *     params: { username: string };
- *     data: { world: string };
- *   };
- * }>
- * ```
- */
-export type OptqAdditionalApiTypeKeys = "requestHeaders" | "responseHeaders" | "params";
-type OptqAllowedApiTypeKeys = OptqAdditionalApiTypeKeys | `${Method} ${string}`;
-export type OptqRequestHeaders<Api, ApiId extends Exclude<keyof Api, OptqAdditionalApiTypeKeys> = never> = Equals<ApiId, never> extends true ? "requestHeaders" extends keyof Api ? NormalizeHeader<Api["requestHeaders"]> : EmptyObject : "requestHeaders" extends keyof Api[ApiId] ? OptqRequestHeaders<Api> & NormalizeHeader<Api[ApiId]["requestHeaders"]> : OptqRequestHeaders<Api>;
-export type OptqResponseHeaders<Api, ApiId extends Exclude<keyof Api, OptqAdditionalApiTypeKeys> = never> = Equals<ApiId, never> extends true ? "responseHeaders" extends keyof Api ? NormalizeHeader<Api["responseHeaders"]> : EmptyObject : "responseHeaders" extends keyof Api[ApiId] ? OptqResponseHeaders<Api> & NormalizeHeader<Api[ApiId]["responseHeaders"]> : OptqResponseHeaders<Api>;
-export type OptqParams<Api extends OptqApiBase<Api>, ApiId extends Exclude<keyof Api, OptqAdditionalApiTypeKeys> = never> = Equals<ApiId, never> extends true ? "params" extends keyof Api ? Api["params"] : EmptyObject : "params" extends keyof Api[ApiId] ? OptqParams<Api> & Api[ApiId]["params"] : OptqParams<Api>;
-export type OptqRequestBody<Api, ApiId extends Exclude<keyof Api, OptqAdditionalApiTypeKeys>> = ApiId extends `GET ${string}` ? never : "body" extends keyof Api[ApiId] ? Api[ApiId]["body"] : undefined;
-export type OptqResourceData<Api extends OptqApiBase<Api>, Path extends string> = `GET ${Path}` extends keyof Api ? "data" extends keyof Api[`GET ${Path}`] ? Api[`GET ${Path}`]["data"] : never : never;
-export type OptqResourceId<Api extends OptqApiBase<Api>> = OptqResourceIdDistribute<Exclude<keyof Api, OptqAdditionalApiTypeKeys> & string>;
-type OptqResourceIdDistribute<ApiId extends string> = ApiId extends `GET ${infer P}` ? P : never;
-export type OptqApiBase<Api> = keyof Api extends OptqAllowedApiTypeKeys ? {
-    requestHeaders?: OptqRequestHeaders<Api>;
-    responseHeaders?: OptqResponseHeaders<Api>;
-    params?: "params" extends keyof Api ? Api["params"] : undefined;
-} & {
-    [K in keyof Api as K extends `${Method} ${string}` ? K : never]: K extends `${infer M extends Method} ${infer P extends string}` ? PrettifyOptional<{
-        params: Equals<ExtractPathParams<P>, never> extends true ? Record<string, string | number | undefined | null> | undefined : Record<ExtractPathParams<P>, string | number | undefined | null>;
-        body: M extends "GET" | "DELETE" ? undefined : unknown | undefined;
-        requestHeaders?: OptqRequestHeaders<Api[K]>;
-        responseHeaders?: OptqResponseHeaders<Api[K]>;
-        data: M extends "GET" ? Exclude<"data" extends keyof Api[K] ? Api[K]["data"] : OptqErrorDataMissingInGetRoute<K>, undefined> : unknown;
-        error?: {
-            status: ErrorStatus;
-            headers?: Record<string, string | undefined>;
-            data?: unknown;
+type OptqAdditionalApiTypeKeys = "requestHeaders" | "responseHeaders" | "params" | "apiVersion";
+type OptqAllowedRouteFields = "params" | "body" | "requestHeaders" | "responseHeaders" | "data" | "resource" | "error";
+type OptqAllowedApiTypeKeys = OptqAdditionalApiTypeKeys | "OPTQ_VALIDATED" | `${Http.Method} ${string}`;
+type OptqApiValidation<Api extends Record<string, unknown>> = Util.Equals<Exclude<keyof Api, OptqAllowedApiTypeKeys>, never> extends false ? {
+    error: {
+        [K in Exclude<keyof Api, OptqAllowedApiTypeKeys>]: "TypeError: invalid field";
+    };
+} : ("apiVersion" extends keyof Api ? Api["apiVersion"] extends number ? `${Api["apiVersion"]}` extends `${string}.${string}` ? true : false : true : false) extends true ? {
+    error: {
+        apiVersion: "TypeError: apiVersion must be an integer";
+    };
+} : ("apiVersion" extends keyof Api ? Util.IsUnion<Api["apiVersion"]> extends true ? true : Util.Equals<Api["apiVersion"], number> : false) extends true ? {
+    error: {
+        apiVersion: "TypeError: apiVersion must be an integer literal";
+    };
+} : ("requestHeaders" extends keyof Api ? Api["requestHeaders"] extends Util.NormalizeHeaders<Api["requestHeaders"]> ? false : true : false) extends true ? {
+    error: {
+        requestHeaders: {
+            [P in keyof Api["requestHeaders"] & string as Util.Not<Util.Equals<P, Lowercase<P>>> extends true ? never : P]: `TypeError: field name \`${P}\` should be in lowercase`;
         };
-    }> : OptqErrorWrongApiTypeKeys<K>;
-} : OptqErrorWrongApiTypeKeys<Exclude<keyof Api, OptqAllowedApiTypeKeys>>;
-export type OptqApiType<Api extends OptqApiBase<Api>> = Api;
-export type OptqConfig<Api extends OptqApiBase<Api>> = {
+    };
+} : ("responseHeaders" extends keyof Api ? Api["responseHeaders"] extends Util.NormalizeHeaders<Api["responseHeaders"]> ? false : true : false) extends true ? {
+    error: {
+        responseHeaders: {
+            [P in keyof Api["responseHeaders"] & string as Util.Not<Util.Equals<P, Lowercase<P>>> extends true ? never : P]: `TypeError: field name \`${P}\` should be in lowercase`;
+        };
+    };
+} : ("params" extends keyof Api ? keyof Api["params"] extends string | number ? false : true : false) extends true ? {
+    error: {
+        params: {
+            [P in Exclude<keyof Api["params"], string | number>]: "TypeError: parameter name is not a string or a number";
+        };
+    };
+} : ("params" extends keyof Api ? Api["params"] extends Record<string, string | number | bigint | boolean | undefined | null> ? false : true : false) extends true ? {
+    error: {
+        params: {
+            [P in keyof Api["params"] as Api["params"][P] extends string | number | bigint | boolean | undefined | null ? never : P]: "TypeError: value does not extend `string | number | bigint | boolean | undefined | null`";
+        };
+    };
+} : Util.Equals<RoutesError<Api>, {}> extends false ? {
+    error: RoutesError<Api>;
+} : Util.Equals<GetRoutesError<Api>, {}> extends false ? {
+    error: GetRoutesError<Api>;
+} : Util.Equals<DeleteRoutesError<Api>, {}> extends false ? {
+    error: DeleteRoutesError<Api>;
+} : Util.Equals<MutationRoutesError<Api>, {}> extends false ? {
+    error: MutationRoutesError<Api>;
+} : Api;
+export type OptqApi<Api extends Record<string, unknown> & Partial<Record<OptqAdditionalApiTypeKeys, unknown>> & ("error" extends keyof OptqApiValidation<Api> ? OptqApiValidation<Api>["error"] : unknown)> = OptqApiValidation<Api> & ("error" extends keyof OptqApiValidation<Api> ? unknown : {
+    OPTQ_VALIDATED: true;
+});
+type Routes<Api> = Exclude<keyof Api & string, OptqAdditionalApiTypeKeys | "OPTQ_VALIDATED">;
+export type RoutesError<Api> = Util.Prettify<{
+    [R in Routes<Api> as Util.Equals<RouteError<Api, R>, never> extends true ? never : R]: RouteError<Api, R>;
+}>;
+type RouteError<Api, R extends Routes<Api>> = (Util.Equals<Util.ExtractPathParams<R>, never> extends true ? false : "params" extends keyof Api[R] ? Util.ExtractPathParams<R> extends keyof Api[R]["params"] ? false : true : true) extends true ? {
+    params: {
+        [P in Exclude<Util.ExtractPathParams<R>, "params" extends keyof Api[R] ? keyof Api[R]["params"] : never>]: `TypeError: missing parameter \`${P}\``;
+    };
+} : ("params" extends keyof Api[R] ? keyof Api[R]["params"] extends string | number ? false : true : false) extends true ? {
+    params: {
+        [P in Exclude<"params" extends keyof Api[R] ? keyof Api[R]["params"] : never, string | number>]: "TypeError: parameter name is not a string or a number";
+    };
+} : ("params" extends keyof Api[R] ? Api[R]["params"] extends Record<string, string | number | bigint | boolean | undefined | null> ? false : true : false) extends true ? {
+    params: {
+        [P in "params" extends keyof Api[R] ? keyof Api[R]["params"] : never as ("params" extends keyof Api[R] ? keyof Api[R]["params"][P] : never) extends string | number | bigint | boolean | undefined | null ? never : P]: "TypeError: value does not extend `string | number | bigint | boolean | undefined | null`";
+    };
+} : ("requestHeaders" extends keyof Api[R] ? Api[R]["requestHeaders"] extends Util.NormalizeHeaders<Api[R]["requestHeaders"]> ? false : true : false) extends true ? {
+    requestHeaders: {
+        [P in ("requestHeaders" extends keyof Api[R] ? keyof Api[R]["requestHeaders"] : never) & string as Util.Not<Util.Equals<P, Lowercase<P>>> extends true ? never : P]: `TypeError: field name \`${P}\` should be in lowercase`;
+    };
+} : ("responseHeaders" extends keyof Api[R] ? Api[R]["responseHeaders"] extends Util.NormalizeHeaders<Api[R]["responseHeaders"]> ? false : true : false) extends true ? {
+    responseHeaders: {
+        [P in ("responseHeaders" extends keyof Api[R] ? keyof Api[R]["responseHeaders"] : never) & string as Util.Not<Util.Equals<P, Lowercase<P>>> extends true ? never : P]: `TypeError: field name \`${P}\` should be in lowercase`;
+    };
+} : ("error" extends keyof Api[R] ? Api[R]["error"] extends {
+    status: Http.ErrorStatus;
+} ? false : true : false) extends true ? {
+    error: "TypeError: error status should be of type Http.ErrorStatus";
+} : (keyof Api[R] extends OptqAllowedRouteFields ? true : false) extends false ? {
+    [K in Exclude<keyof Api[R], OptqAllowedRouteFields>]: "TypeError: fields other than params, body, requestHeaders, responseHeaders, data, resource, error are not allowed";
+} : never;
+export type GetRoutes<Api> = Routes<Api> & `GET ${string}`;
+type GetRoutesError<Api> = Util.Prettify<{
+    [G in GetRoutes<Api> as Util.Equals<GetRouteError<Api, G>, never> extends true ? never : G]: GetRouteError<Api, G>;
+}>;
+type GetRouteError<Api, G extends GetRoutes<Api>> = ("data" extends keyof Api[G] ? true : false) extends false ? {
+    data: "TypeError: data is missing";
+} : "body" extends keyof Api[G] ? {
+    body: "TypeError: body should not be defined in GET routes";
+} : never;
+type DeleteRoutes<Api> = Routes<Api> & `DELETE ${string}`;
+type DeleteRoutesError<Api> = Util.Prettify<{
+    [D in DeleteRoutes<Api> as Util.Equals<DeleteRouteError<Api, D>, never> extends true ? never : D]: DeleteRouteError<Api, D>;
+}>;
+type DeleteRouteError<Api, D extends DeleteRoutes<Api>> = "body" extends keyof Api[D] ? {
+    body: "TypeError: body should not be defined in DELETE routes";
+} : never;
+export type MutationRoutes<Api> = Routes<Api> & `${Exclude<Http.Method, "GET">} ${string}`;
+type MutationRoutesError<Api> = Util.Prettify<{
+    [M in MutationRoutes<Api> as Util.Equals<MutationRouteError<Api, M>, never> extends true ? never : M]: MutationRouteError<Api, M>;
+}>;
+type MutationRouteError<Api, D extends MutationRoutes<Api>> = "resource" extends keyof Api[D] ? {
+    resource: "TypeError: resource should not be defined in POST, PUT, PATCH, DELETE routes";
+} : never;
+/**
+ * OptqConfig<Api>
+ */
+export type OptqConfig<Api extends Record<string, unknown> & Partial<Record<OptqAdditionalApiTypeKeys, unknown>>> = {
     /**
      * TanStack Query client
      */
     queryClient?: QueryClient;
     /**
      * Base URL for all requests
-     * @default ""
+     * @default "/"
      */
     baseUrl?: string;
     /**
@@ -82,132 +170,163 @@ export type OptqConfig<Api extends OptqApiBase<Api>> = {
      * Global function to get server responded time from a response
      * @param response Optq response object
      */
-    respondedAt?(response: OptqResponse<Api>): bigint | number;
-    routes?: {
-        [K in Exclude<keyof Api, OptqAdditionalApiTypeKeys>]?: K extends `${infer M extends Method} ${infer P extends string}` & keyof Api ? M extends "GET" ? OptqResourceRouteConfig<Api, K & `GET ${P}`, P> : M extends Exclude<Method, "GET"> ? OptqMutationRouteConfig<Api, M, K> : never : never;
-    };
+    respondedAt?: (response: {
+        headers: Util.PickOr<Api, "responseHeaders", Http.AnyHeaders>;
+    }) => bigint;
+    routes: Util.PrettifyOptional<{
+        [G in GetRoutes<Api>]: OptqGetRouteConfig<Api, G> | (Util.Equals<Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>, Util.PickOr<Api[G], "data", never>> extends true ? undefined : never);
+    } & {
+        [R in MutationRoutes<Api>]?: OptqMutationRouteConfig<Api, R>;
+    }> | (Util.Equals<OptqRoutesWithResourceType<Api, GetRoutes<Api>>, never> extends true ? undefined : never);
+} & ("apiVersion" extends keyof Api ? {
+    apiVersion: Api["apiVersion"];
+} : {});
+type OptqRoutesWithResourceType<Api, G extends GetRoutes<Api>> = G extends unknown ? "resource" extends keyof Api[G] ? Api[G]["resource"] : never : never;
+type OptqRouteConfig<Api, R extends Routes<Api>> = {
+    respondedAt?: (response: OptqResponse<Api, R>) => bigint;
+    hash?: "params" extends keyof Api[R] ? (params: Util.PickOr<Api[R], "params", {}>) => string : never;
+    onError?: <E extends unknown>(error: E) => unknown;
 };
-export type OptqResourceRouteConfig<Api extends OptqApiBase<Api>, ApiId extends Exclude<keyof Api, OptqAdditionalApiTypeKeys> & `GET ${string}`, Path extends string> = {
-    respondedAt?(response: OptqResponse<Api, ApiId>): bigint | number;
-    hash?(params: OptqParams<Api, ApiId>): string;
-    defaultValue?: OptqResourceData<Api, Path> | ((params: OptqParams<Api, ApiId>) => OptqResourceData<Api, Path>);
+export type OptqGetRouteConfig<Api, G extends GetRoutes<Api>> = OptqRouteConfig<Api, G> & {
+    defaultValue?: Util.Optional<Exclude<Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>, Function>> | ("params" extends keyof Api[G] ? (params: Util.PickOr<Api[G], "params", never>) => Util.Optional<Exclude<Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>, Function>> : never);
+    onResponse?: (response: Util.Prettify<OptqResponse<Api, G> & {
+        params: Util.PickOr<Api[G], "params", never>;
+        request: {
+            headers: OptqRequestHeaders<Api, G>;
+        };
+        respondedAt: bigint;
+    }>) => unknown;
+} & {
+    [Transform in "transform" as Util.Equals<Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>, Util.PickOr<Api[G], "data", never>> extends true ? never : "transform"]: (response: Util.Prettify<OptqResponse<Api, G> & {
+        ok: true;
+        params: Util.PickOr<Api[G], "params", never>;
+        request: {
+            headers: OptqRequestHeaders<Api, G>;
+        };
+        respondedAt: bigint;
+    }>) => Util.PickOr<Api[G], "resource", never>;
 };
-export type OptqMutationRouteConfig<Api extends OptqApiBase<Api>, M extends Exclude<Method, "GET">, ApiId extends Exclude<keyof Api, OptqAdditionalApiTypeKeys> & `${M} ${string}`> = {
-    respondedAt?(response: OptqResponse<Api, ApiId>): bigint | number;
-    actions?(requestWithSet: OptqRequest<Api, ApiId> & {
-        set<ResId extends OptqResourceId<Api>>(resourceId: ResId, params: OptqParams<Api, `GET ${ResId}` & Exclude<keyof Api, OptqAdditionalApiTypeKeys>>, update: (OptqResourceData<Api, ResId> | undefined) | ((prev: OptqResourceData<Api, ResId> | undefined) => OptqResourceData<Api, ResId> | undefined)): void;
-    }): void;
-    onResponse?(response: OptqMutationResponse<Api, M, ApiId> & {
-        params: OptqParams<Api, ApiId>;
-        request: OptqRequest<Api, ApiId>;
-        respondedAt: number | bigint;
-        set<ResId extends OptqResourceId<Api>>(resourceId: ResId, params: OptqParams<Api, `GET ${ResId}` & Exclude<keyof Api, OptqAdditionalApiTypeKeys>>, data: OptqResourceData<Api, ResId>): void;
-        removeRequest(): void;
-    }): void;
+export type OptqMutationRouteConfig<Api, R extends MutationRoutes<Api>> = OptqRouteConfig<Api, R> & {
+    actions?: (request: Util.Prettify<OptqRequest<Api, R> & {
+        respondedAt?: bigint;
+        waitingNetwork?: boolean;
+        affectedPredictions?: [Util.ExtractPath<GetRoutes<Api>>, string][];
+        set: <G extends GetRoutes<Api>>(otherResourceId: Util.ExtractPath<G>, params: Util.PickOr<Api[G], "params", {} | null | undefined>, update: Util.Optional<Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>> | ((prev: Util.Optional<Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>>) => Util.Optional<Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>>)) => void;
+    }>) => void;
+    onResponse?: (response: Util.Prettify<OptqResponse<Api, R> & {
+        params: Util.PickOr<Api[R], "params", never>;
+        request: Util.Prettify<{
+            id: string;
+            headers: OptqRequestHeaders<Api, R>;
+        } & {
+            [Body in "body" as R extends `${"DELETE"} ${string}` ? never : Body]: Util.PickOr<Api[R], "body", never>;
+        }>;
+        respondedAt: bigint;
+        set: <G extends GetRoutes<Api>>(resourceId: Util.ExtractPath<G>, params: Util.PickOr<Api[G], "params", {} | null | undefined>, value: Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>) => void;
+        removeRequest: () => void;
+    }>) => unknown;
 };
-export type OptqRequest<Api extends OptqApiBase<Api>, ApiId extends Exclude<keyof Api, OptqAdditionalApiTypeKeys> & `${Exclude<Method, "GET">} ${string}`> = {
+export type OptqRequestHeaders<Api, R extends Routes<Api>> = Util.PickOr<Api[R], "requestHeaders", Http.AnyHeaders> & Util.PickOr<Api, "requestHeaders", unknown>;
+export type OptqResponseHeaders<Api, R extends Routes<Api>> = Util.PickOr<Api[R], "responseHeaders", Http.AnyHeaders> & Util.PickOr<Api, "responseHeaders", Http.AnyHeaders>;
+export type OptqRequest<Api, R extends Routes<Api>> = {
     id: string;
-    apiId: ApiId;
-    params: OptqParams<Api, ApiId>;
-    headers: OptqRequestHeaders<Api, ApiId>;
-    body: OptqRequestBody<Api, ApiId>;
+    apiId: R;
+    params: Util.PickOr<Api[R], "params", never>;
+    headers: OptqRequestHeaders<Api, R>;
+    body: Util.PickOr<Api[R], "body", never>;
 };
-export type OptqResponse<Api extends OptqApiBase<Api>, ApiId extends Exclude<keyof Api, OptqAdditionalApiTypeKeys> = never> = Equals<ApiId, never> extends true ? {
-    headers: OptqResponseHeaders<Api>;
-} : ApiId extends `GET ${string}` ? OptqGetResponse<Api, ApiId> : ApiId extends `${infer M extends Exclude<Method, "GET">} ${string}` ? OptqMutationResponse<Api, M, ApiId> : never;
-export type OptqGetResponse<Api extends OptqApiBase<Api>, ApiId extends Exclude<keyof Api, OptqAdditionalApiTypeKeys> & `GET ${string}`> = "data" extends keyof Api[ApiId] ? Prettify<{
-    status: OkStatus;
+export type OptqResponse<Api, R extends Routes<Api>> = Util.Prettify<{
+    status: Http.OkStatus;
     ok: true;
-    headers: OptqResponseHeaders<Api, ApiId>;
-    data: Api[ApiId]["data"];
+    headers: OptqResponseHeaders<Api, R>;
+    data: Util.PickOr<Api[R], "data", undefined>;
 } | ({
-    headers: OptqResponseHeaders<Api>;
-} & ("error" extends keyof Api[ApiId] ? Api[ApiId]["error"] extends {
-    status: ErrorStatus;
-    headers?: AnyHeaders;
+    headers: Util.PickOr<Api, "responseHeaders", never>;
+} & ("error" extends keyof Api[R] ? Api[R]["error"] extends {
+    status: Http.ErrorStatus;
+    headers?: Http.AnyHeaders;
     data?: unknown;
-} ? Prettify<Api[ApiId]["error"] & {
+} ? Util.Prettify<Api[R]["error"] & {
     ok: false;
-    headers: AnyHeaders;
+    headers: Http.AnyHeaders;
     data?: unknown;
 }> : never : {
-    status: ErrorStatus;
     ok: false;
-    headers: AnyHeaders;
+    status: Http.ErrorStatus;
+    headers?: Http.AnyHeaders;
     data?: unknown;
-}))> : never;
-export type OptqMutationResponse<Api extends OptqApiBase<Api>, M extends Exclude<Method, "GET">, ApiId extends Exclude<keyof Api, OptqAdditionalApiTypeKeys> & `${M} ${string}`> = Prettify<{
-    status: OkStatus;
-    ok: true;
-    headers: OptqResponseHeaders<Api, ApiId>;
-    data: "data" extends keyof Api[ApiId] ? Api[ApiId]["data"] : undefined;
-} | ("error" extends keyof Api[ApiId] ? Api[ApiId]["error"] extends {
-    status: ErrorStatus;
-    headers?: AnyHeaders;
-    data?: unknown;
-} ? OptqMutationResponseDistributeError<Api, Api[ApiId]["error"]> : never : {
-    status: ErrorStatus;
-    ok: false;
-    headers: AnyHeaders;
-    data?: unknown;
-})>;
-type OptqMutationResponseDistributeError<Api, E extends {
-    status: ErrorStatus;
-    headers?: AnyHeaders;
-    data?: unknown;
-}> = E extends unknown ? {
-    ok: false;
-    status: E["status"];
-    headers: "headers" extends keyof E ? Prettify<OptqResponseHeaders<Api> & E["headers"]> : OptqResponseHeaders<Api> & AnyHeaders;
-    data: E["data"];
-} : never;
-export type OptqRequestStore<Api extends OptqApiBase<Api>> = OptqRequestStoreDistribute<Api, Exclude<keyof Api, OptqAdditionalApiTypeKeys> & `${Exclude<Method, "GET">} ${string}`>[];
-type OptqRequestStoreDistribute<Api extends OptqApiBase<Api>, ApiId extends Exclude<keyof Api, OptqAdditionalApiTypeKeys> & `${Exclude<Method, "GET">} ${string}`> = ApiId extends unknown ? Prettify<OptqRequest<Api, ApiId> & {
-    respondedAt?: number | bigint;
+}))>;
+/**
+ * Optq instance type, returned by `createOptq` function
+ */
+export type Optq<Api extends {
+    OPTQ_VALIDATED: true;
+}> = {
+    config: OptqConfig<Api>;
+    queryClient: QueryClient;
+    requestStore: OptqRequestStore<Api>;
+    cacheStore: OptqCacheStore<Api>;
+    predictionStore: OptqPredictionStore<Api>;
+    set: OptqSetter<Api>;
+    get: OptqGetter<Api>;
+    fetch: OptqFetcher<Api>;
+    mutate: OptqMutator<Api>;
+    pendingResponses: Promise<PendingResponseResult<Api>[]>;
+};
+export type OptqRequestStore<Api extends {
+    OPTQ_VALIDATED: true;
+}> = OptqRequestStoreDistribute<Api, MutationRoutes<Api>>[];
+export type OptqRequestStoreDistribute<Api extends {
+    OPTQ_VALIDATED: true;
+} & Record<string, unknown>, R extends MutationRoutes<Api>> = R extends unknown ? Util.Prettify<OptqRequest<Api, R> & {
+    respondedAt?: bigint;
     waitingNetwork?: boolean;
-    affectedPredictions?: [OptqResourceId<Api>, string][];
+    affectedPredictions?: [Util.ExtractPath<GetRoutes<Api>>, string][];
 }> : never;
-export type OptqCacheStore<Api extends OptqApiBase<Api>> = {
-    [ResId in OptqResourceId<Api>]?: {
+export type OptqCacheStore<Api extends {
+    OPTQ_VALIDATED: true;
+}> = {
+    [G in GetRoutes<Api> as Util.ExtractPath<G>]?: {
         [hash: string]: {
-            value: OptqResourceData<Api, ResId>;
-            respondedAt: number | bigint;
-        };
+            value: Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>;
+            respondedAt: bigint;
+        } | undefined;
     } | undefined;
 };
-export type OptqPredictionStore<Api extends OptqApiBase<Api>> = {
-    [K in OptqResourceId<Api>]?: {
-        [hash: string]: OptqResourceData<Api, K> | undefined;
+export type OptqPredictionStore<Api extends {
+    OPTQ_VALIDATED: true;
+}> = {
+    [G in GetRoutes<Api> as G extends `GET ${infer P extends string}` ? P : never]?: {
+        [hash: string]: Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>> | undefined;
     } | undefined;
 };
-type Equals<X, Y> = (<T>() => T extends X ? 1 : 2) extends <T>() => T extends Y ? 1 : 2 ? true : false;
-type Prettify<T> = {
-    [K in keyof T]: T[K];
-} & {};
-type ExtractConcrete<T> = {
-    [K in keyof T as undefined extends T[K] ? never : Equals<T[K], never> extends true ? never : K]: T[K];
-} & {};
-export type PrettifyOptional<T> = Prettify<ExtractConcrete<T> & Partial<T>>;
-type NormalizeHeader<H> = PrettifyOptional<{
-    [K in keyof H & string as H[K] extends string | undefined ? Lowercase<K> : never]: H[K];
-}>;
-type EmptyObject = {};
-export type EmptyToUndefined<T> = Equals<T, EmptyObject> extends true ? undefined : T;
-export type OptqSetter<Api extends OptqApiBase<Api>> = <ResId extends OptqResourceId<Api>>(resourceId: ResId & keyof OptqCacheStore<Api>, params: OptqParams<Api, `GET ${ResId}` & Exclude<keyof Api, OptqAdditionalApiTypeKeys>>, value: OptqResourceData<Api, ResId>, respondedAt: number | bigint) => void;
-type OptqGetterOptionalParams<Api extends OptqApiBase<Api>, ResId extends OptqResourceId<Api>> = Equals<OptqParams<Api, `GET ${ResId}` & Exclude<keyof Api, OptqAdditionalApiTypeKeys>>, EmptyObject> extends true ? [params?: OptqParams<Api, `GET ${ResId}` & Exclude<keyof Api, OptqAdditionalApiTypeKeys>>] : [params: OptqParams<Api, `GET ${ResId}` & Exclude<keyof Api, OptqAdditionalApiTypeKeys>>];
-export type OptqGetter<Api extends OptqApiBase<Api>> = <ResId extends OptqResourceId<Api>>(resourceId: ResId, ...optionalParams: OptqGetterOptionalParams<Api, ResId>) => OptqResourceData<Api, ResId> | undefined;
-export type OptqMutator<Api extends OptqApiBase<Api>> = <ApiId extends Exclude<keyof Api, OptqAdditionalApiTypeKeys> & `${Exclude<Method, "GET">} ${string}`>(req: Omit<OptqRequest<Api, ApiId>, "id"> & {
+export type OptqSetter<Api extends {
+    OPTQ_VALIDATED: true;
+}> = <G extends GetRoutes<Api>>(resourceId: Util.ExtractPath<G>, params: Util.PickOr<Api[G], "params", {} | null | undefined>, value: Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>, respondedAt: bigint) => void;
+export type OptqGetterOptionalParam<Api extends {
+    OPTQ_VALIDATED: true;
+}, G extends GetRoutes<Api>> = Util.Equals<Util.PickOr<Api[G], "params", {}>, {}> extends true ? [params?: undefined] : [params: Util.PickOr<Api[G], "params", never>];
+export type OptqGetter<Api extends {
+    OPTQ_VALIDATED: true;
+}> = <G extends GetRoutes<Api>>(resourceId: Util.ExtractPath<G>, ...optionalParams: OptqGetterOptionalParam<Api, G>) => Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>> | undefined;
+export type OptqFetcherOptionalParams<Api extends {
+    OPTQ_VALIDATED: true;
+}, G extends GetRoutes<Api>> = Util.Equals<Util.PickOr<Api[G], "params", {}>, {}> extends true ? {} extends Util.PickOr<Api[G], "requestHeaders", Http.AnyHeaders> ? [params?: {} | undefined | null] | [params: {} | undefined | null, headers: OptqRequestHeaders<Api, G>] : [params: {} | undefined | null, headers: OptqRequestHeaders<Api, G>] : {} extends Util.PickOr<Api[G], "requestHeaders", Http.AnyHeaders> ? [params: Util.PickOr<Api[G], "params", never>, headers?: OptqRequestHeaders<Api, G>] : [params: Util.PickOr<Api[G], "params", never>, headers: OptqRequestHeaders<Api, G>];
+export type OptqFetcher<Api extends {
+    OPTQ_VALIDATED: true;
+}> = <G extends GetRoutes<Api>>(resourceId: Util.ExtractPath<G>, ...optionalParams: OptqFetcherOptionalParams<Api, G>) => Promise<OptqResponse<Api, G>>;
+export type OptqMutator<Api extends {
+    OPTQ_VALIDATED: true;
+}> = <R extends MutationRoutes<Api>>(req: Omit<OptqRequest<Api, R>, "id"> & {
     id?: string;
-}) => Promise<OptqResponse<Api, ApiId> & {
-    status: number;
-    ok: boolean;
-    data?: unknown;
-}>;
-export type PendingResponseResult<Api extends OptqApiBase<Api>> = {
+}) => Promise<OptqResponse<Api, R>>;
+export type PendingResponseResult<Api extends {
+    OPTQ_VALIDATED: true;
+}> = {
     status: "fulfilled";
     value: {
         request: OptqRequestStore<Api>[number];
-        response: OptqResponse<Api, Exclude<keyof Api, OptqAdditionalApiTypeKeys>>;
+        response: OptqResponse<Api, Routes<Api>>;
     };
 } | {
     status: "rejected";
@@ -216,19 +335,4 @@ export type PendingResponseResult<Api extends OptqApiBase<Api>> = {
     };
     reason: unknown;
 };
-/**
- * Optq instance type, returned by `createOptq` function
- */
-export type Optq<Api extends OptqApiBase<Api>> = {
-    config: OptqConfig<Api>;
-    queryClient: QueryClient;
-    requestStore: OptqRequestStore<Api>;
-    cacheStore: OptqCacheStore<Api>;
-    predictionStore: OptqPredictionStore<Api>;
-    set: OptqSetter<Api>;
-    get: OptqGetter<Api>;
-    mutate: OptqMutator<Api>;
-    pendingResponses: Promise<PendingResponseResult<Api>[]>;
-};
 export {};
-//# sourceMappingURL=types.d.ts.map

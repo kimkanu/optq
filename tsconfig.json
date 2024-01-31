@@ -9,7 +9,6 @@
 
     /* Emit */
     "declaration": true,
-    "declarationMap": true,
 
     /* Linting */
     "strict": true,

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json.schemastore.org/package",
+  "name": "@optq/local-native",
+  "type": "module",
+  "version": "0.1.2",
+  "description": "Cache OptQ queries locally in native environments.",
+  "exports": {
+    ".": "./dist/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": ["dist"],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "dependencies": {
+    "@optq/local": "workspace:*",
+    "superjson": "^2.2.1"
+  },
+  "peerDependencies": {
+    "@op-engineering/op-sqlite": "^2.0.16"
+  },
+  "scripts": {
+    "build": "rimraf dist && tsc --build && esbuild --minify dist/**/*.js --outdir=dist --allow-overwrite"
+  },
+  "gitHead": "6f81f9c96b3f3f1190a5519c7d7465280abed7b6"
+}

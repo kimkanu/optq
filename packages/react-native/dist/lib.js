@@ -1,0 +1,1 @@
+"use strict";import{focusManager as r}from"@tanstack/query-core";import{AppState as o}from"react-native";export function installFocusManager(){r.setEventListener(e=>{const t=o.addEventListener("change",n=>{e(n==="active")});return()=>{t.remove()}})}

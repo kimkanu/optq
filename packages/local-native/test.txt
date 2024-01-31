@@ -1,0 +1,32 @@
+/* Metadata table */
+CREATE TABLE IF NOT EXISTS metadata(id INTEGER PRIMARY KEY, version INTEGER NOT NULL, apiVersion INTEGER NOT NULL);
+INSERT INTO metadata (id, version, apiVersion) VALUES (0, 1, 1) ON CONFLICT (id) DO UPDATE SET version=excluded.version, apiVersion=excluded.apiVersion;
+/* SELECT (version) FROM metadata LIMIT 1; */
+/* Data tables */
+CREATE TABLE IF NOT EXISTS requests(
+    id TEXT PRIMARY KEY,
+    apiId TEXT NOT NULL,
+    params JSON,
+    headers JSON,
+    body JSON,
+    respondedAt INT,
+    waitingNetwork BOOLEAN,
+    affectedPredictions JSON
+);
+CREATE TABLE IF NOT EXISTS caches(
+    resId TEXT NOT NULL,
+    hash TEXT NOT NULL,
+    value JSON,
+    respondedAt INT NOT NULL,
+    PRIMARY KEY (resId, hash)
+);
+CREATE TABLE IF NOT EXISTS predictions(
+    resId TEXT NOT NULL,
+    hash TEXT NOT NULL,
+    value JSON,
+    PRIMARY KEY (resId, hash)
+);
+/* Data tables */
+INSERT INTO caches (resId, hash, value, respondedAt) VALUES ('/user/:userId/version', '1', '{version:1}', '1706381200463123') ON CONFLICT (resId, hash) DO UPDATE SET value=excluded.value,respondedAt=excluded.respondedAt;
+INSERT INTO caches (resId, hash, value, respondedAt) VALUES ('/user/:userId/version', '2', '{version:5}', '1706381200463123') ON CONFLICT (resId, hash) DO UPDATE SET value=excluded.value,respondedAt=excluded.respondedAt;
+SELECT * FROM caches;

@@ -1,3 +1,2 @@
-export { createOptq } from "./lib.js";
-export type { ErrorStatus, Method, OkStatus, Optq, OptqAdditionalApiTypeKeys, OptqApiBase, OptqApiType, OptqConfig, OptqGetResponse, OptqMutationResponse, OptqParams, OptqPredictionStore, OptqRequestHeaders, OptqResourceData, OptqResourceId, OptqResourceRouteConfig, OptqResponseHeaders, } from "./types.js";
-//# sourceMappingURL=index.d.ts.map
+export { createOptq, getGetter, getSetter, getFetcher, getMutator } from "./lib.js";
+export type { Util as OptqTypeUtil, Http, Optq, OptqApi, OptqConfig, OptqGetRouteConfig, OptqMutationRouteConfig, OptqRequestHeaders, OptqResponseHeaders, OptqRequest, OptqResponse, OptqRequestStore, OptqCacheStore, OptqPredictionStore, OptqSetter, OptqGetter, OptqFetcher, OptqMutator, GetRoutes, MutationRoutes, } from "./types.js";

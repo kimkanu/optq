@@ -1,5 +1,5 @@
 /// <reference types="react" />
-import type { Optq, OptqAdditionalApiTypeKeys, OptqApiBase, OptqGetResponse, OptqParams, OptqRequestHeaders, OptqResourceData, OptqResourceId } from "@optq/core";
+import { GetRoutes, Optq, OptqResponse, OptqTypeUtil as Util } from "@optq/core";
 import { UseQueryResult, type UseQueryOptions } from "@tanstack/react-query";
 export type OptqRequestStats = {
     completed: number;
@@ -8,34 +8,33 @@ export type OptqRequestStats = {
     total: number;
     ratio: number;
 };
-type UseOptqQueryArgument<Api extends OptqApiBase<Api>, ResId extends OptqResourceId<Api>> = {
-    resourceId: ResId;
-    headers?: OptqRequestHeaders<Api, `GET ${ResId}` & Exclude<keyof Api, OptqAdditionalApiTypeKeys>>;
-} & PrettifyOptional<{
-    params: EmptyToUndefined<OptqParams<Api, `GET ${ResId}` & Exclude<keyof Api, OptqAdditionalApiTypeKeys>>>;
+type UseOptqQueryArgument<Api extends {
+    OPTQ_VALIDATED: true;
+}, G extends GetRoutes<Api>> = {
+    resourceId: Util.ExtractPath<G>;
+} & Util.PrettifyOptional<{
+    headers: Util.PickOr<Api[G], "requestHeaders", never> & Util.PickOr<Api, "requestHeaders", never>;
+    params: Util.Equals<Util.PickOr<Api[G], "params", {}>, {}> extends true ? undefined : Util.PickOr<Api[G], "params", never>;
 }> & Omit<UseQueryOptions, "queryKey" | "queryFn">;
-export type UseOptq<Api extends OptqApiBase<Api>> = Optq<Api> & {
-    useQuery: <ResId extends OptqResourceId<Api>>(arg: UseOptqQueryArgument<Api, ResId>) => UseQueryResult<OptqResourceData<Api, ResId>> & {
-        last: OptqGetResponse<Api, ResId>;
+export type UseOptq<Api extends {
+    OPTQ_VALIDATED: true;
+}> = Optq<Api> & {
+    useQuery: <G extends GetRoutes<Api>>(arg: UseOptqQueryArgument<Api, G>) => UseQueryResult<Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>> & {
+        last: OptqResponse<Api, G>;
     };
 };
-export declare function OptqProvider<Api extends OptqApiBase<Api>>({ children, value, }: {
+export declare function OptqProvider<Api extends {
+    OPTQ_VALIDATED: true;
+}>({ children, value, }: {
     children?: React.ReactNode;
     value: Optq<Api>;
 }): import("react/jsx-runtime").JSX.Element;
-export declare function useOptq<Api extends OptqApiBase<Api>>(): UseOptq<Api>;
-export declare function useOptqRequestStats<Api extends OptqApiBase<Api>>(optq: Pick<Optq<Api>, "requestStore">, options?: {
+export declare function useOptq<Api extends {
+    OPTQ_VALIDATED: true;
+}>(): UseOptq<Api>;
+export declare function useOptqRequestStats<Api extends {
+    OPTQ_VALIDATED: true;
+}>(optq: Pick<Optq<Api>, "requestStore">, options?: {
     debounce: number;
 }): OptqRequestStats;
-type EmptyObject = {};
-type Equals<X, Y> = (<T>() => T extends X ? 1 : 2) extends <T>() => T extends Y ? 1 : 2 ? true : false;
-type Prettify<T> = {
-    [K in keyof T]: T[K];
-} & {};
-type ExtractConcrete<T> = {
-    [K in keyof T as undefined extends T[K] ? never : Equals<T[K], never> extends true ? never : K]: T[K];
-} & {};
-type EmptyToUndefined<T> = Equals<T, EmptyObject> extends true ? undefined : T;
-type PrettifyOptional<T> = Prettify<ExtractConcrete<T> & Partial<T>>;
 export {};
-//# sourceMappingURL=lib.d.ts.map

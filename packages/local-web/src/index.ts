@@ -1,221 +1,131 @@
-import type { Optq, OptqApiBase } from "@optq/core";
-import { openDB, type DBSchema } from "idb";
-import SuperJSON from "superjson";
-import { subscribe } from "valtio/vanilla";
+import type { Optq } from "@optq/core";
+import {
+  type OptqSchema,
+  type OptqDatabase,
+  installOptqLocalDatabaseHelper,
+  OPTQ_DATABASE_VERSION,
+} from "@optq/local";
+import { type IDBPDatabase, openDB } from "idb";
 
-const CURRENT_VERSION = 1;
+export default async function installOptqLocalDatabase<Api extends { OPTQ_VALIDATED: true }>(
+  optq: Optq<Api>,
+  databaseName: string = "optq",
+) {
+  if (typeof indexedDB === "undefined") {
+    throw new Error("IndexedDB is not supported in this environment");
+  }
+  const database = await OptqWebDatabase.new(databaseName);
+  await installOptqLocalDatabaseHelper(optq, database);
+}
 
-interface OptqDB extends DBSchema {
-  requests: {
-    key: string;
+interface MetadataSchema {
+  metadata: {
+    key: 0;
     value: {
-      id: string;
-      apiId: string;
-      params: unknown;
-      headers: unknown;
-      body: unknown;
-      respondedAt?: number | string; // string for bigint
-      waitingNetwork?: boolean;
-      affectedPredictions?: [string, string][];
+      id: 0;
+      apiVersion?: number;
     };
-  };
-  caches: {
-    key: number;
-    value: {
-      resId: string;
-      hash: string;
-      value: unknown;
-      respondedAt: number | string; // string for bigint
-    };
-    indexes: { "resId, hash": [string, string] };
-  };
-  predictions: {
-    key: number;
-    value: {
-      resId: string;
-      hash: string;
-      value: unknown;
-    };
-    indexes: { "resId, hash": [string, string] };
   };
 }
 
-export default async function installOptqLocalDatabase<Api extends OptqApiBase<Api>>(
-  optq: Optq<Api>,
-) {
-  if (!("indexedDB" in window)) {
-    console.error("This browser doesn't support IndexedDB");
-    return;
+class OptqWebDatabase implements OptqDatabase {
+  private constructor(
+    public readonly database: IDBPDatabase<OptqSchema & MetadataSchema>,
+    public readonly name: string,
+  ) {}
+
+  static async new(name = "optq") {
+    const database = await openDB<OptqSchema & MetadataSchema>(name, OPTQ_DATABASE_VERSION, {
+      upgrade(database: IDBPDatabase<OptqSchema & MetadataSchema>, oldVersion: number) {
+        let version = oldVersion;
+
+        if (version < 1) {
+          if (!database.objectStoreNames.contains("metadata")) {
+            database.createObjectStore("metadata");
+          }
+
+          if (!database.objectStoreNames.contains("requests")) {
+            database.createObjectStore("requests");
+          }
+          if (!database.objectStoreNames.contains("caches")) {
+            const cacheStore = database.createObjectStore("caches", { autoIncrement: true });
+            cacheStore.createIndex("resId, hash", ["resId", "hash"]);
+          }
+          if (!database.objectStoreNames.contains("predictions")) {
+            const predictionStore = database.createObjectStore("predictions", {
+              autoIncrement: true,
+            });
+            predictionStore.createIndex("resId, hash", ["resId", "hash"]);
+          }
+
+          version = 1;
+        }
+      },
+    });
+
+    return new OptqWebDatabase(database, name);
   }
 
-  const database = await openDB<OptqDB>("optq", CURRENT_VERSION, {
-    upgrade(database, oldVersion) {
-      let version = oldVersion;
+  async getMetadata() {
+    const entry = await this.database.get("metadata", 0);
+    return {
+      version: this.database.version,
+      apiVersion: entry?.apiVersion,
+    };
+  }
 
-      if (version < 1) {
-        if (!database.objectStoreNames.contains("requests")) {
-          database.createObjectStore("requests");
-        }
-        if (!database.objectStoreNames.contains("caches")) {
-          const cacheStore = database.createObjectStore("caches", { autoIncrement: true });
-          cacheStore.createIndex("resId, hash", ["resId", "hash"]);
-        }
-        if (!database.objectStoreNames.contains("predictions")) {
-          const predictionStore = database.createObjectStore("predictions", {
-            autoIncrement: true,
-          });
-          predictionStore.createIndex("resId, hash", ["resId", "hash"]);
-        }
+  async setMetadata({ apiVersion }: { version: number; apiVersion?: number }) {
+    return void (await this.database.put("metadata", { id: 0, apiVersion }, 0));
+  }
 
-        version = 1;
-      }
-    },
-  });
+  getAllRequests() {
+    return this.database.getAll("requests");
+  }
 
-  await database.getAll("requests").then(async (requests) => {
-    for (const { respondedAt, ...request } of requests) {
-      try {
-        // @ts-ignore
-        optq.requestStore.push({
-          ...request,
-          respondedAt: typeof respondedAt === "string" ? BigInt(respondedAt) : respondedAt,
-        });
-      } catch (e) {
-        console.error(e);
-      }
-    }
-  });
-  await database.getAll("predictions").then(async (predictions) => {
-    for (const { resId, hash, value } of predictions) {
-      try {
-        // @ts-ignore
-        optq.predictionStore[resId] ??= {};
-        // @ts-ignore
-        optq.predictionStore[resId]![hash] = SuperJSON.deserialize(value);
-      } catch (e) {
-        console.error(e);
-      }
-    }
-  });
-  await database.getAll("caches").then(async (caches) => {
-    for (const { resId, hash, value, respondedAt } of caches) {
-      try {
-        // @ts-ignore
-        optq.cacheStore[resId] ??= {};
-        // @ts-ignore
-        optq.cacheStore[resId]![hash] = {
-          // @ts-ignore
-          value: SuperJSON.deserialize(value),
-          respondedAt: typeof respondedAt === "string" ? BigInt(respondedAt) : respondedAt,
-        };
-      } catch (e) {
-        console.error(e);
-      }
-    }
-  });
+  getAllCaches() {
+    return this.database.getAll("caches");
+  }
 
-  subscribe(optq.requestStore, async (ops) => {
-    const tx = database.transaction("requests", "readwrite");
-    const store = tx.objectStore("requests");
+  getAllPredictions() {
+    return this.database.getAll("predictions").then((predictions) => {
+      return predictions;
+    });
+  }
 
-    for (const op of ops) {
-      try {
-        if (op[0] === "delete") {
-          const { id } = op[2] as { id: string };
-          await store.delete(id);
-        } else if (op[0] === "set" && op[1].length === 1 && op[1][0] !== "length" && op[3]) {
-          const { id } = op[3] as { id: string };
-          await store.delete(id);
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    }
+  async deleteRequest({ id }: { id: string }) {
+    await this.database.delete("requests", id);
+  }
 
-    for (const request of optq.requestStore) {
-      try {
-        const {
-          id,
-          apiId,
-          params,
-          headers,
-          body,
-          respondedAt,
-          waitingNetwork,
-          affectedPredictions,
-        } = SuperJSON.deserialize<(typeof optq.requestStore)[number]>(SuperJSON.serialize(request));
+  async deleteCache({ resId, hash }: { resId: string; hash: string }) {
+    const entry = await this.database.getKeyFromIndex("caches", "resId, hash", [resId, hash]);
+    if (entry === undefined) return;
+    await this.database.delete("caches", entry);
+  }
 
-        if (!waitingNetwork) continue;
+  async deletePrediction({ resId, hash }: { resId: string; hash: string }) {
+    const entry = await this.database.getKeyFromIndex("predictions", "resId, hash", [resId, hash]);
+    if (entry === undefined) return;
+    await this.database.delete("predictions", entry);
+  }
 
-        await store.put(
-          {
-            id,
-            apiId,
-            params,
-            headers,
-            body,
-            waitingNetwork,
-            affectedPredictions,
-            respondedAt: typeof respondedAt === "bigint" ? respondedAt.toString() : respondedAt,
-          },
-          id,
-        );
-      } catch (e) {
-        console.error(e);
-      }
-    }
-
-    await tx.done;
-  });
-  subscribe(optq.predictionStore, async (ops) => {
-    const tx = database.transaction("predictions", "readwrite");
-    const store = tx.objectStore("predictions");
-    for (const op of ops) {
-      try {
-        if (op[0] !== "set") continue;
-
-        const [, path, value] = op;
-        if (path.length !== 2) continue;
-
-        const [resId, hash] = path as [string, string];
-
-        const entry = await store.index("resId, hash").getKey([resId, hash]);
-        await store.put({ resId, hash, value: SuperJSON.serialize(value) }, entry);
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    await tx.done;
-  });
-  subscribe(optq.cacheStore, async (ops) => {
-    const tx = database.transaction("caches", "readwrite");
-    const store = tx.objectStore("caches");
-    for (const op of ops) {
-      try {
-        if (op[0] !== "set") continue;
-
-        // @ts-ignore
-        const [, path, { value, respondedAt }] = op;
-        if (path.length !== 2) continue;
-
-        const [resId, hash] = path as [string, string];
-
-        const entry = await store.index("resId, hash").getKey([resId, hash]);
-        await store.put(
-          {
-            resId,
-            hash,
-            value: SuperJSON.serialize(value),
-            respondedAt: typeof respondedAt === "bigint" ? respondedAt.toString() : respondedAt,
-          },
-          entry,
-        );
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    await tx.done;
-  });
-
-  return database;
+  async upsertRequest(request: OptqSchema["requests"]["value"]) {
+    await this.database.put("requests", request, request.id);
+  }
+  async upsertCache({
+    resId,
+    hash,
+    value,
+    respondedAt,
+  }: OptqSchema["caches"]["value"]): Promise<void> {
+    const entry = await this.database.getKeyFromIndex("caches", "resId, hash", [resId, hash]);
+    await this.database.put("caches", { resId, hash, value, respondedAt }, entry);
+  }
+  async upsertPrediction({
+    resId,
+    hash,
+    value,
+  }: OptqSchema["predictions"]["value"]): Promise<void> {
+    const entry = await this.database.getKeyFromIndex("predictions", "resId, hash", [resId, hash]);
+    await this.database.put("predictions", { resId, hash, value }, entry);
+  }
 }

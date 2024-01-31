@@ -8,16 +8,12 @@
     ".": "./dist/index.js",
     "./package.json": "./package.json"
   },
-  "files": [
-    "dist",
-    "src"
-  ],
+  "files": ["dist"],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "dependencies": {
-    "@optq/core": "^0.1.1",
-    "idb": "^8.0.0",
-    "superjson": "^2.2.1"
+    "@optq/local": "workspace:*",
+    "idb": "^8.0.0"
   },
   "scripts": {
     "build": "rimraf dist && tsc --build && esbuild --minify dist/**/*.js --outdir=dist --allow-overwrite"
