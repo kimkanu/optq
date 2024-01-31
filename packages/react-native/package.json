@@ -8,16 +8,18 @@
     ".": "./dist/index.js",
     "./package.json": "./package.json"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "dependencies": {
     "@optq/react": "workspace:*"
   },
   "peerDependencies": {
+    "@tanstack/query-core": "^5.17.19",
     "react": "^18.2.0",
-    "react-native": "^0.73.0",
-    "@tanstack/query-core": "^5.17.19"
+    "react-native": "^0.73.0"
   },
   "scripts": {
     "build": "rimraf dist && tsc --build && esbuild --minify dist/**/*.js --outdir=dist --allow-overwrite"
