@@ -1,5 +1,5 @@
 import { createOptq, type OptqApi } from "@optq/react";
-import { installFocusManager } from "@optq/react-native";
+import { patchOptqForReactNative } from "@optq/react-native";
 import installOptqLocalDatabase from "@optq/local-native";
 
 export type Api = OptqApi<{
@@ -13,6 +13,7 @@ export type Api = OptqApi<{
     data: {
       version: number;
     };
+    resource: number;
   };
   "POST /users/:userId/version/increase": {
     params: {
@@ -28,7 +29,7 @@ export type Api = OptqApi<{
 }>;
 
 export const optq = createOptq<Api>({
-  baseUrl: "/api",
+  baseUrl: process.env.EXPO_PUBLIC_API_URL,
   respondedAt({ headers }) {
     return BigInt(headers["x-responded-at"]);
   },
@@ -36,16 +37,19 @@ export const optq = createOptq<Api>({
   routes: {
     "GET /users/:userId/version": {
       hash: ({ userId }) => userId,
+      transform({ data }) {
+        return data.version;
+      },
+      defaultValue: 1,
     },
     "POST /users/:userId/version/increase": {
-      actions({ params: { userId }, body, set }) {
-        set("/users/:userId/version", { userId }, (prev) => ({
-          version: (prev?.version ?? 1) + (body?.increaseBy ?? 1),
-        }));
+      actions({ apiId, params: { userId }, body, set, removeOfflineRequests }) {
+        removeOfflineRequests((other) => apiId === other.apiId && userId === other.params.userId);
+        set("/users/:userId/version", { userId }, (prev) => (prev ?? 1) + (body?.increaseBy ?? 1));
       },
       onResponse({ set, ok, data, params: { userId }, removeRequest }) {
         if (ok) {
-          set("/users/:userId/version", { userId }, { version: data.version });
+          set("/users/:userId/version", { userId }, data.version);
         } else {
           return removeRequest();
         }
@@ -54,6 +58,6 @@ export const optq = createOptq<Api>({
   },
 });
 
-export const databaseInstallationPromise = installOptqLocalDatabase(optq).catch((e) => {});
+export const databaseInstallationPromise = installOptqLocalDatabase(optq).catch(() => {});
 
-installFocusManager();
+patchOptqForReactNative();

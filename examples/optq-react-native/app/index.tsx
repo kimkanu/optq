@@ -6,17 +6,24 @@ import { useEffect, useState } from "react";
 import { Picker } from "@react-native-picker/picker";
 import RequestProgress from "@/components/RequestProgress";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
+import { onlineManager } from "@tanstack/react-query";
 
 export default function App() {
-  const [ready, setReady] = useState(false);
+  const [database, setDatabase] = useState<Awaited<typeof databaseInstallationPromise> | undefined>(
+    undefined,
+  );
   useEffect(() => {
-    databaseInstallationPromise.then(() => {
-      setReady(true);
-    });
+    databaseInstallationPromise.then(setDatabase);
   }, []);
 
+  useEffect(() => {
+    if (!database) return;
+
+    database.getMetadata().then((metadata) => console.log("Metadata:", metadata));
+  }, [database]);
+
   return (
-    ready && (
+    !!database && (
       <SafeAreaProvider>
         <OptqProvider value={optq}>
           <Page />
@@ -80,7 +87,22 @@ function Page() {
           gap: 12,
         }}
       >
-        <Text style={{ fontSize: 24 }}>Version: {data?.version}</Text>
+        <Text style={{ fontSize: 24 }}>
+          Version:{" "}
+          {data ? (
+            data.version
+          ) : (
+            <Text
+              style={{
+                fontSize: 20,
+                letterSpacing: -0.2,
+                color: "#9ca3af",
+              }}
+            >
+              Missing
+            </Text>
+          )}
+        </Text>
         <Pressable
           onPress={async () => {
             await optq.mutate({

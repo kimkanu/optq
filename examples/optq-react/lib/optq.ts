@@ -42,7 +42,8 @@ export const optq = createOptq<Api>({
       defaultValue: 1,
     },
     "POST /users/:userId/version/increase": {
-      actions({ params: { userId }, body, set }) {
+      actions({ apiId, params: { userId }, body, set, removeOfflineRequests }) {
+        removeOfflineRequests((other) => apiId === other.apiId && userId === other.params.userId);
         set("/users/:userId/version", { userId }, (prev) => (prev ?? 1) + (body?.increaseBy ?? 1));
       },
       onResponse({ set, ok, data, params: { userId }, removeRequest }) {

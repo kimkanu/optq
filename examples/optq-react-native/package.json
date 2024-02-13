@@ -16,6 +16,7 @@
     "@optq/local-native": "workspace:*",
     "@optq/react": "workspace:*",
     "@optq/react-native": "workspace:*",
+    "@react-native-community/netinfo": "11.1.0",
     "@react-native-picker/picker": "2.6.1",
     "@react-navigation/native": "^6.0.2",
     "@react-spring/native": "^9.7.3",
@@ -35,6 +36,7 @@
     "react-native-screens": "~3.29.0",
     "react-native-svg": "^14.1.0",
     "react-native-web": "~0.19.6",
+    "valtio": "^1.13.0",
     "zod": "^3.22.4"
   },
   "devDependencies": {
