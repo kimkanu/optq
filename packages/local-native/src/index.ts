@@ -5,7 +5,7 @@ import {
   installOptqLocalDatabaseHelper,
   OPTQ_DATABASE_VERSION,
 } from "@optq/local";
-import { type OPSQLiteConnection } from "@op-engineering/op-sqlite";
+import { open, type OPSQLiteConnection } from "@op-engineering/op-sqlite";
 
 export default async function installOptqLocalDatabase<Api extends { OPTQ_VALIDATED: true }>(
   optq: Optq<Api>,
@@ -18,8 +18,6 @@ export default async function installOptqLocalDatabase<Api extends { OPTQ_VALIDA
   if (!isNative) {
     throw new Error("You can only use `@optq/local-native` in React Native.");
   }
-
-  const { open } = require("@op-engineering/op-sqlite");
 
   class OptqNativeDatabase implements OptqDatabase {
     private constructor(
@@ -162,4 +160,6 @@ export default async function installOptqLocalDatabase<Api extends { OPTQ_VALIDA
 
   const database = OptqNativeDatabase.new(databaseName);
   await installOptqLocalDatabaseHelper(optq, database);
+
+  return database;
 }

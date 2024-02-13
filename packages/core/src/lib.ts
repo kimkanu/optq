@@ -46,10 +46,8 @@ export function createOptq<Api extends { OPTQ_VALIDATED: true }>(
   const mutate = getMutator({ config, requestStore, cacheStore, predictionStore, set });
 
   const becameOnline = new Promise<void>((resolve) => {
-    if (onlineManager.isOnline()) return resolve();
-    const unsubscribe = onlineManager.subscribe((isOnline) => {
+    onlineManager.subscribe((isOnline) => {
       if (isOnline) {
-        unsubscribe();
         resolve();
       }
     });
@@ -70,12 +68,16 @@ export function createOptq<Api extends { OPTQ_VALIDATED: true }>(
       return responses;
     }
 
+    // TODO: batching?
     return await Promise.all(
       requestStore
         .filter((request) => request.waitingNetwork)
-        .map(async (request): Promise<PendingResponseResult<Api>> => {
+        .map(async (request, requestIndex): Promise<PendingResponseResult<Api>> => {
           request.waitingNetwork = false;
           try {
+            // Give a slight delay
+            const delay = requestIndex * 10;
+            await new Promise((resolve) => setTimeout(resolve, delay));
             const response = await mutate(request);
             return { status: "fulfilled", value: { request, response } };
           } catch (e) {
@@ -85,10 +87,10 @@ export function createOptq<Api extends { OPTQ_VALIDATED: true }>(
     );
   });
 
-  focusManager.setEventListener((handleFocus_) => {
-    const handleFocus = () => handleFocus_();
+  if (typeof window !== "undefined" && window.addEventListener) {
+    focusManager.setEventListener((handleFocus_) => {
+      const handleFocus = () => handleFocus_();
 
-    if (typeof window !== "undefined" && window.addEventListener) {
       window.addEventListener("visibilitychange", handleFocus, false);
       window.addEventListener("focus", handleFocus, false);
 
@@ -96,8 +98,8 @@ export function createOptq<Api extends { OPTQ_VALIDATED: true }>(
         window.removeEventListener("visibilitychange", handleFocus);
         window.removeEventListener("focus", handleFocus);
       };
-    }
-  });
+    });
+  }
 
   const optq: Optq<Api> = {
     config,
@@ -308,13 +310,25 @@ export function getMutator<Api extends { OPTQ_VALIDATED: true }>(optq: {
       affectedPredictions.push([resourceId, hash]);
     };
 
+    const removeOfflineRequests = (
+      predicate: <S extends MutationRoutes<Api>>(
+        request: Util.Prettify<OptqRequest<Api, S>>,
+      ) => boolean,
+    ) => {
+      for (let i = optq.requestStore.length - 1; i >= 0; i--) {
+        if (optq.requestStore[i].waitingNetwork && predicate(optq.requestStore[i])) {
+          optq.requestStore.splice(i, 1);
+        }
+      }
+    };
+
     if (!optq.requestStore.some((request) => request.id === id)) {
       optq.requestStore.push({
         ...request,
         waitingNetwork: !onlineManager.isOnline(),
         affectedPredictions,
       } as OptqRequestStoreDistribute<Api, R>);
-      route?.actions?.({ ...request, set: markAffectedPredictions });
+      route?.actions?.({ ...request, set: markAffectedPredictions, removeOfflineRequests });
 
       for (const [resourceId, hash] of affectedPredictions) {
         invalidatePrediction(optq, resourceId as Util.ExtractPath<GetRoutes<Api>>, hash);
@@ -420,7 +434,8 @@ function invalidatePrediction<Api extends { OPTQ_VALIDATED: true }, G extends Ge
   optq.predictionStore[resourceId][hash] = optq.cacheStore[resourceId]?.[hash]?.value;
 
   for (const request of optq.requestStore) {
-    request.affectedPredictions = [];
+    request.affectedPredictions =
+      request.affectedPredictions?.filter(([r, h]) => r !== resourceId || h !== hash) ?? [];
 
     // Update prediction only if either `request` is not responded (`request.respondedAt === undefined`)
     //                           or `request.respondedAt` is strictly newer (larger) than `cache.respondedAt`
@@ -454,18 +469,21 @@ function invalidatePrediction<Api extends { OPTQ_VALIDATED: true }, G extends Ge
         return;
       }
 
-      type UpdateFn = (
-        prev: Util.Optional<Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>>,
-      ) => Util.Optional<Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>>;
+      type Resource = Util.Optional<
+        Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>
+      >;
+      type UpdateFn = (prev: Resource) => Resource;
       const newValue =
         typeof update !== "function"
           ? update
           : (update as UpdateFn)(optq.predictionStore[resourceId][hash]);
 
       optq.predictionStore[resourceId][hash] = newValue;
-      request.affectedPredictions!.push([resourceId, hash]);
+      if (request.affectedPredictions!.every(([r, h]) => r !== resourceId || h !== hash)) {
+        request.affectedPredictions!.push([resourceId, hash]);
+      }
     };
-    optq.config.routes?.[request.apiId]?.actions?.({ ...request, set });
+    optq.config.routes?.[request.apiId]?.actions?.({ ...request, set, removeRequests: () => {} });
   }
 
   // Remove resolved requests

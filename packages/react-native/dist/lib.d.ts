@@ -1,1 +1,1 @@
-export declare function installFocusManager(): void;
+export declare function patchOptqForReactNative(): void;

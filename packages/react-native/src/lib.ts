@@ -1,14 +1,21 @@
-import { focusManager } from "@tanstack/query-core";
+import { focusManager, onlineManager } from "@tanstack/query-core";
 import { AppState } from "react-native";
+import NetInfo from "@react-native-community/netinfo";
 
-export function installFocusManager() {
+export function patchOptqForReactNative() {
+  // Patch focusManager
   focusManager.setEventListener((handleFocus) => {
     const subscription = AppState.addEventListener("change", (state) => {
       handleFocus(state === "active");
     });
 
-    return () => {
-      subscription.remove();
-    };
+    return subscription.remove;
+  });
+
+  // Patch onlineManager
+  onlineManager.setEventListener((setOnline) => {
+    return NetInfo.addEventListener((state) => {
+      setOnline(!!state.isConnected);
+    });
   });
 }

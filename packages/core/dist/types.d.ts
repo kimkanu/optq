@@ -152,6 +152,7 @@ type MutationRouteError<Api, D extends MutationRoutes<Api>> = "resource" extends
  * OptqConfig<Api>
  */
 export type OptqConfig<Api extends Record<string, unknown> & Partial<Record<OptqAdditionalApiTypeKeys, unknown>>> = {
+    __type?: Api;
     /**
      * TanStack Query client
      */
@@ -206,12 +207,14 @@ export type OptqGetRouteConfig<Api, G extends GetRoutes<Api>> = OptqRouteConfig<
         respondedAt: bigint;
     }>) => Util.PickOr<Api[G], "resource", never>;
 };
+type OptqRequestDistribute<Api, S extends MutationRoutes<Api>> = S extends MutationRoutes<Api> ? OptqRequest<Api, S> : never;
 export type OptqMutationRouteConfig<Api, R extends MutationRoutes<Api>> = OptqRouteConfig<Api, R> & {
     actions?: (request: Util.Prettify<OptqRequest<Api, R> & {
         respondedAt?: bigint;
         waitingNetwork?: boolean;
         affectedPredictions?: [Util.ExtractPath<GetRoutes<Api>>, string][];
         set: <G extends GetRoutes<Api>>(otherResourceId: Util.ExtractPath<G>, params: Util.PickOr<Api[G], "params", {} | null | undefined>, update: Util.Optional<Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>> | ((prev: Util.Optional<Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>>) => Util.Optional<Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>>)) => void;
+        removeOfflineRequests: (predicate: (request: OptqRequestDistribute<Api, MutationRoutes<Api>>) => boolean) => void;
     }>) => void;
     onResponse?: (response: Util.Prettify<OptqResponse<Api, R> & {
         params: Util.PickOr<Api[R], "params", never>;

@@ -434,6 +434,8 @@ type MutationRouteError<Api, D extends MutationRoutes<Api>> = "resource" extends
 export type OptqConfig<
   Api extends Record<string, unknown> & Partial<Record<OptqAdditionalApiTypeKeys, unknown>>,
 > = {
+  __type?: Api;
+
   /**
    * TanStack Query client
    */
@@ -537,6 +539,10 @@ export type OptqGetRouteConfig<Api, G extends GetRoutes<Api>> = OptqRouteConfig<
   ) => Util.PickOr<Api[G], "resource", never>;
 };
 
+type OptqRequestDistribute<Api, S extends MutationRoutes<Api>> = S extends MutationRoutes<Api>
+  ? OptqRequest<Api, S>
+  : never;
+
 export type OptqMutationRouteConfig<Api, R extends MutationRoutes<Api>> = OptqRouteConfig<
   Api,
   R
@@ -559,6 +565,9 @@ export type OptqMutationRouteConfig<Api, R extends MutationRoutes<Api>> = OptqRo
               ) => Util.Optional<
                 Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>
               >),
+        ) => void;
+        removeOfflineRequests: (
+          predicate: (request: OptqRequestDistribute<Api, MutationRoutes<Api>>) => boolean,
         ) => void;
       }
     >,
