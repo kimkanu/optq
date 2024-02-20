@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import { Picker } from "@react-native-picker/picker";
 import RequestProgress from "@/components/RequestProgress";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
-import { onlineManager } from "@tanstack/react-query";
 
 export default function App() {
   const [database, setDatabase] = useState<Awaited<typeof databaseInstallationPromise> | undefined>(
@@ -89,8 +88,8 @@ function Page() {
       >
         <Text style={{ fontSize: 24 }}>
           Version:{" "}
-          {data ? (
-            data.version
+          {data !== undefined ? (
+            data
           ) : (
             <Text
               style={{

@@ -596,6 +596,10 @@ export type OptqMutationRouteConfig<Api, R extends MutationRoutes<Api>> = OptqRo
           value: Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>,
         ) => void;
         removeRequest: () => void;
+        invalidatePrediction: <G extends GetRoutes<Api>>(
+          resourceId: Util.ExtractPath<G>,
+          ...params: OptqGetterOptionalParam<Api & { OPTQ_VALIDATED: true }, G>
+        ) => void;
       }
     >,
   ) => unknown;
@@ -615,13 +619,18 @@ export type OptqResponseHeaders<Api, R extends Routes<Api>> = Util.PickOr<
 > &
   Util.PickOr<Api, "responseHeaders", Http.AnyHeaders>;
 
-export type OptqRequest<Api, R extends Routes<Api>> = {
+export type OptqRequest<Api, R extends Routes<Api>> = Util.PrettifyOptional<{
   id: string;
   apiId: R;
-  params: Util.PickOr<Api[R], "params", never>;
-  headers: OptqRequestHeaders<Api, R>;
-  body: Util.PickOr<Api[R], "body", never>;
-};
+  params: Util.PickOr<Api[R], "params", undefined>;
+  headers: [
+    Util.PickOr<Api[R], "requestHeaders", undefined>,
+    Util.PickOr<Api, "requestHeaders", undefined>,
+  ] extends [undefined, undefined]
+    ? OptqRequestHeaders<Api, R> | undefined
+    : OptqRequestHeaders<Api, R>;
+  body: Util.PickOr<Api[R], "body", undefined>;
+}>;
 
 export type OptqResponse<Api, R extends Routes<Api>> = Util.Prettify<
   | {

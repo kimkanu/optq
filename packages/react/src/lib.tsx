@@ -25,21 +25,28 @@ export type OptqRequestStats = {
   ratio: number;
 };
 
-type UseOptqQueryArgument<Api extends { OPTQ_VALIDATED: true }, G extends GetRoutes<Api>> = {
-  resourceId: Util.ExtractPath<G>;
+type UseOptqQueryArgument<
+  Api extends { OPTQ_VALIDATED: true },
+  G extends GetRoutes<Api>,
+  P extends Util.ExtractPath<G>,
+> = {
+  resourceId: P;
 } & Util.PrettifyOptional<{
-  headers: Util.PickOr<Api[G], "requestHeaders", never> & Util.PickOr<Api, "requestHeaders", never>;
-  params: Util.Equals<Util.PickOr<Api[G], "params", {}>, {}> extends true
+  headers: Util.PickOr<Api[G & `GET ${P}`], "requestHeaders", never> &
+    Util.PickOr<Api, "requestHeaders", never>;
+  params: Util.Equals<Util.PickOr<Api[G & `GET ${P}`], "params", {}>, {}> extends true
     ? undefined
-    : Util.PickOr<Api[G], "params", never>;
+    : Util.PickOr<Api[G & `GET ${P}`], "params", never>;
 }> &
   Omit<UseQueryOptions, "queryKey" | "queryFn">;
 
 export type UseOptq<Api extends { OPTQ_VALIDATED: true }> = Optq<Api> & {
-  useQuery: <G extends GetRoutes<Api>>(
-    arg: UseOptqQueryArgument<Api, G>,
-  ) => UseQueryResult<Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>> & {
-    last: OptqResponse<Api, G>;
+  useQuery: <G extends GetRoutes<Api>, P extends Util.ExtractPath<G>>(
+    arg: UseOptqQueryArgument<Api, G, P>,
+  ) => UseQueryResult<
+    Util.PickOr<Api[G & `GET ${P}`], "resource", Util.PickOr<Api[G & `GET ${P}`], "data", never>>
+  > & {
+    last: OptqResponse<Api, G & `GET ${P}`>;
   };
 };
 
@@ -67,12 +74,12 @@ export function useOptq<Api extends { OPTQ_VALIDATED: true }>(): UseOptq<Api> {
   }
 
   const useOptqQuery = useCallback(
-    <G extends GetRoutes<Api>>({
+    <G extends GetRoutes<Api>, P extends Util.ExtractPath<G>>({
       resourceId,
       params,
       headers,
       ...options
-    }: UseOptqQueryArgument<Api, G>) => {
+    }: UseOptqQueryArgument<Api, G, P>) => {
       const apiId = `GET ${resourceId}` as G;
       const route = optq.config?.routes?.[apiId] as OptqGetRouteConfig<Api, G> | undefined;
       const hashFn = (route?.hash ?? objectHash) as (
@@ -84,7 +91,7 @@ export function useOptq<Api extends { OPTQ_VALIDATED: true }>(): UseOptq<Api> {
 
       const { data: last, ...rest } = useQuery({
         queryKey: [resourceId, hash],
-        queryFn: () => optq.fetch(resourceId, params as any, headers as any),
+        queryFn: () => optq.fetch<G>(resourceId, params as any, headers as any),
         ...options,
       });
 
@@ -98,7 +105,7 @@ export function useOptq<Api extends { OPTQ_VALIDATED: true }>(): UseOptq<Api> {
       );
 
       const data = useMemo(() => {
-        return get(resourceId, params as any);
+        return get<G>(resourceId, params as any);
       }, [get, predictionSnapshot, resourceId, params]);
 
       return { data, last, ...rest };

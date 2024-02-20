@@ -228,6 +228,17 @@ export function getFetcher<Api extends { OPTQ_VALIDATED: true }>(optq: {
         route?.respondedAt?.(response) ??
         optq.config?.respondedAt?.(response) ??
         getDefaultRespondedAt(response);
+
+      route?.onResponse?.({
+        respondedAt,
+        params,
+        status: response.status,
+        ok: response.ok,
+        headers: response.headers,
+        data: response.data,
+        request: { headers },
+      });
+
       const transformPayload = {
         ...response,
         params,
@@ -391,6 +402,12 @@ export function getMutator<Api extends { OPTQ_VALIDATED: true }>(optq: {
                 invalidatePrediction(optq, resourceId, hash);
               }
             }
+          },
+          invalidatePrediction: (resourceId, params) => {
+            const route = optq.config?.routes?.[`GET ${resourceId}`];
+            const hashFn = route?.hash ?? objectHash;
+            const hash = hashFn(params ?? {});
+            invalidatePrediction(optq, resourceId, hash);
           },
         });
 

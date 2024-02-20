@@ -10,17 +10,17 @@ export type OptqRequestStats = {
 };
 type UseOptqQueryArgument<Api extends {
     OPTQ_VALIDATED: true;
-}, G extends GetRoutes<Api>> = {
-    resourceId: Util.ExtractPath<G>;
+}, G extends GetRoutes<Api>, P extends Util.ExtractPath<G>> = {
+    resourceId: P;
 } & Util.PrettifyOptional<{
-    headers: Util.PickOr<Api[G], "requestHeaders", never> & Util.PickOr<Api, "requestHeaders", never>;
-    params: Util.Equals<Util.PickOr<Api[G], "params", {}>, {}> extends true ? undefined : Util.PickOr<Api[G], "params", never>;
+    headers: Util.PickOr<Api[G & `GET ${P}`], "requestHeaders", never> & Util.PickOr<Api, "requestHeaders", never>;
+    params: Util.Equals<Util.PickOr<Api[G & `GET ${P}`], "params", {}>, {}> extends true ? undefined : Util.PickOr<Api[G & `GET ${P}`], "params", never>;
 }> & Omit<UseQueryOptions, "queryKey" | "queryFn">;
 export type UseOptq<Api extends {
     OPTQ_VALIDATED: true;
 }> = Optq<Api> & {
-    useQuery: <G extends GetRoutes<Api>>(arg: UseOptqQueryArgument<Api, G>) => UseQueryResult<Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>> & {
-        last: OptqResponse<Api, G>;
+    useQuery: <G extends GetRoutes<Api>, P extends Util.ExtractPath<G>>(arg: UseOptqQueryArgument<Api, G, P>) => UseQueryResult<Util.PickOr<Api[G & `GET ${P}`], "resource", Util.PickOr<Api[G & `GET ${P}`], "data", never>>> & {
+        last: OptqResponse<Api, G & `GET ${P}`>;
     };
 };
 export declare function OptqProvider<Api extends {
