@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/package",
   "name": "@optq/local",
   "type": "module",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Cache OptQ queries locally in web environments.",
   "exports": {
     ".": "./dist/index.js",
