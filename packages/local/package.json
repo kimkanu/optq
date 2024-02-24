@@ -14,8 +14,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "dependencies": {
-    "@optq/core": "workspace:*",
-    "superjson": "^2.2.1"
+    "@optq/core": "workspace:*"
   },
   "scripts": {
     "build": "rimraf dist && tsc --build && esbuild --minify dist/**/*.js --outdir=dist --allow-overwrite"

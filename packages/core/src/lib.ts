@@ -4,6 +4,7 @@ import { QueryClient, onlineManager, focusManager } from "@tanstack/query-core";
 import { nanoid } from "nanoid/non-secure";
 import objectHash from "object-hash";
 import { proxy } from "valtio/vanilla";
+import SuperJSON from "superjson";
 
 import type {
   Http,
@@ -29,6 +30,7 @@ import type {
   MutationRoutes,
   OptqMutationRouteConfig,
   OptqRequestStoreDistribute,
+  Stringified,
 } from "./types.js";
 
 export function createOptq<Api extends { OPTQ_VALIDATED: true }>(
@@ -142,7 +144,7 @@ export function getSetter<Api extends { OPTQ_VALIDATED: true }>(optq: {
       optq.cacheStore[resourceId]?.[hash]?.respondedAt;
     if (prevRespondedAt === undefined || prevRespondedAt <= respondedAt) {
       optq.cacheStore[resourceId] ??= {};
-      optq.cacheStore[resourceId][hash] = { value, respondedAt };
+      optq.cacheStore[resourceId][hash] = { value: SuperJSON.stringify(value), respondedAt };
     }
 
     invalidatePrediction(optq, resourceId, hash);
@@ -171,7 +173,7 @@ export function getGetter<Api extends { OPTQ_VALIDATED: true }>(optq: {
 
     const prediction: Util.Optional<
       Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>
-    > = optq.predictionStore[resourceId]?.[hash];
+    > = parse(optq.predictionStore[resourceId]?.[hash]);
     if (prediction !== undefined) return prediction;
 
     if (typeof route.defaultValue === "function") {
@@ -473,7 +475,7 @@ function invalidatePrediction<Api extends { OPTQ_VALIDATED: true }, G extends Ge
       ): otherResourceId is Util.ExtractPath<G> & Util.ExtractPath<H> {
         return (
           (otherResourceId as unknown) === resourceId &&
-          hash === hashFn(params as unknown as Parameters<typeof hashFn>[0])
+          hash === hashFn((params ?? {}) as unknown as Parameters<typeof hashFn>[0])
         );
       }
       if (!isSameResource(otherResourceId)) return;
@@ -493,9 +495,9 @@ function invalidatePrediction<Api extends { OPTQ_VALIDATED: true }, G extends Ge
       const newValue =
         typeof update !== "function"
           ? update
-          : (update as UpdateFn)(optq.predictionStore[resourceId][hash]);
+          : (update as UpdateFn)(parse(optq.predictionStore[resourceId][hash]));
 
-      optq.predictionStore[resourceId][hash] = newValue;
+      optq.predictionStore[resourceId][hash] = SuperJSON.stringify(newValue);
       if (request.affectedPredictions!.every(([r, h]) => r !== resourceId || h !== hash)) {
         request.affectedPredictions!.push([resourceId, hash]);
       }
@@ -596,4 +598,13 @@ async function internalFetch<D, H>({
 
 function getDefaultRespondedAt(response: { headers: any }) {
   return BigInt(new Date(response.headers.date ?? Date.now()).getTime());
+}
+
+function parse<T>(string?: Stringified<T>) {
+  if (!string) return undefined;
+  try {
+    return SuperJSON.parse(string) as T;
+  } catch {
+    return undefined;
+  }
 }

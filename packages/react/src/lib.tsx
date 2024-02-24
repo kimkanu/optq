@@ -91,7 +91,7 @@ export function useOptq<Api extends { OPTQ_VALIDATED: true }>(): UseOptq<Api> {
 
       const { data: last, ...rest } = useQuery({
         queryKey: [resourceId, hash],
-        queryFn: () => optq.fetch<G>(resourceId, params as any, headers as any),
+        queryFn: () => optq.fetch<G, P>(resourceId, params as any, headers as any),
         ...options,
       });
 
@@ -105,7 +105,7 @@ export function useOptq<Api extends { OPTQ_VALIDATED: true }>(): UseOptq<Api> {
       );
 
       const data = useMemo(() => {
-        return get<G>(resourceId, params as any);
+        return get<G, P>(resourceId, params as any);
       }, [get, predictionSnapshot, resourceId, params]);
 
       return { data, last, ...rest };

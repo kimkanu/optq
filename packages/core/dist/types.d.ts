@@ -1,4 +1,7 @@
 import type { QueryClient } from "@tanstack/query-core";
+export type Stringified<T> = string & {
+    __BASE__: T;
+};
 export declare namespace Util {
     export type Assert<T extends true> = T;
     export type Equals<X, Y> = (<T>() => T extends X ? 1 : 2) extends <T>() => T extends Y ? 1 : 2 ? true : false;
@@ -174,21 +177,16 @@ export type OptqConfig<Api extends Record<string, unknown> & Partial<Record<Optq
     respondedAt?: (response: {
         headers: Util.PickOr<Api, "responseHeaders", Http.AnyHeaders>;
     }) => bigint;
-    routes: Util.PrettifyOptional<{
-        [G in GetRoutes<Api>]: OptqGetRouteConfig<Api, G> | (Util.Equals<Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>, Util.PickOr<Api[G], "data", never>> extends true ? undefined : never);
-    } & {
-        [R in MutationRoutes<Api>]?: OptqMutationRouteConfig<Api, R>;
-    }> | (Util.Equals<OptqRoutesWithResourceType<Api, GetRoutes<Api>>, never> extends true ? undefined : never);
+    routes: OptqRouteConfig<Api>;
 } & ("apiVersion" extends keyof Api ? {
     apiVersion: Api["apiVersion"];
 } : {});
-type OptqRoutesWithResourceType<Api, G extends GetRoutes<Api>> = G extends unknown ? "resource" extends keyof Api[G] ? Api[G]["resource"] : never : never;
-type OptqRouteConfig<Api, R extends Routes<Api>> = {
+type OptqBaseRouteConfig<Api, R extends Routes<Api>> = {
     respondedAt?: (response: OptqResponse<Api, R>) => bigint;
     hash?: "params" extends keyof Api[R] ? (params: Util.PickOr<Api[R], "params", {}>) => string : never;
     onError?: <E extends unknown>(error: E) => unknown;
 };
-export type OptqGetRouteConfig<Api, G extends GetRoutes<Api>> = OptqRouteConfig<Api, G> & {
+export type OptqGetRouteConfig<Api, G extends GetRoutes<Api>> = OptqBaseRouteConfig<Api, G> & {
     defaultValue?: Util.Optional<Exclude<Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>, Function>> | ("params" extends keyof Api[G] ? (params: Util.PickOr<Api[G], "params", never>) => Util.Optional<Exclude<Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>, Function>> : never);
     onResponse?: (response: Util.Prettify<OptqResponse<Api, G> & {
         params: Util.PickOr<Api[G], "params", never>;
@@ -208,7 +206,7 @@ export type OptqGetRouteConfig<Api, G extends GetRoutes<Api>> = OptqRouteConfig<
     }>) => Util.PickOr<Api[G], "resource", never>;
 };
 type OptqRequestDistribute<Api, S extends MutationRoutes<Api>> = S extends MutationRoutes<Api> ? OptqRequest<Api, S> : never;
-export type OptqMutationRouteConfig<Api, R extends MutationRoutes<Api>> = OptqRouteConfig<Api, R> & {
+export type OptqMutationRouteConfig<Api, R extends MutationRoutes<Api>> = OptqBaseRouteConfig<Api, R> & {
     actions?: (request: Util.Prettify<OptqRequest<Api, R> & {
         respondedAt?: bigint;
         waitingNetwork?: boolean;
@@ -297,7 +295,7 @@ export type OptqCacheStore<Api extends {
 }> = {
     [G in GetRoutes<Api> as Util.ExtractPath<G>]?: {
         [hash: string]: {
-            value: Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>;
+            value: Stringified<Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>>;
             respondedAt: bigint;
         } | undefined;
     } | undefined;
@@ -306,7 +304,7 @@ export type OptqPredictionStore<Api extends {
     OPTQ_VALIDATED: true;
 }> = {
     [G in GetRoutes<Api> as G extends `GET ${infer P extends string}` ? P : never]?: {
-        [hash: string]: Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>> | undefined;
+        [hash: string]: Stringified<Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>> | undefined;
     } | undefined;
 };
 export type OptqSetter<Api extends {
@@ -317,13 +315,13 @@ export type OptqGetterOptionalParam<Api extends {
 }, G extends GetRoutes<Api>> = Util.Equals<Util.PickOr<Api[G], "params", {}>, {}> extends true ? [params?: undefined] : [params: Util.PickOr<Api[G], "params", never>];
 export type OptqGetter<Api extends {
     OPTQ_VALIDATED: true;
-}> = <G extends GetRoutes<Api>>(resourceId: Util.ExtractPath<G>, ...optionalParams: OptqGetterOptionalParam<Api, G>) => Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>> | undefined;
+}> = <G extends GetRoutes<Api>, P extends Util.ExtractPath<G>>(resourceId: P, ...optionalParams: OptqGetterOptionalParam<Api, G & `GET ${P}`>) => Util.PickOr<Api[G & `GET ${P}`], "resource", Util.PickOr<Api[G & `GET ${P}`], "data", never>> | undefined;
 export type OptqFetcherOptionalParams<Api extends {
     OPTQ_VALIDATED: true;
 }, G extends GetRoutes<Api>> = Util.Equals<Util.PickOr<Api[G], "params", {}>, {}> extends true ? {} extends Util.PickOr<Api[G], "requestHeaders", Http.AnyHeaders> ? [params?: {} | undefined | null] | [params: {} | undefined | null, headers: OptqRequestHeaders<Api, G>] : [params: {} | undefined | null, headers: OptqRequestHeaders<Api, G>] : {} extends Util.PickOr<Api[G], "requestHeaders", Http.AnyHeaders> ? [params: Util.PickOr<Api[G], "params", never>, headers?: OptqRequestHeaders<Api, G>] : [params: Util.PickOr<Api[G], "params", never>, headers: OptqRequestHeaders<Api, G>];
 export type OptqFetcher<Api extends {
     OPTQ_VALIDATED: true;
-}> = <G extends GetRoutes<Api>>(resourceId: Util.ExtractPath<G>, ...optionalParams: OptqFetcherOptionalParams<Api, G>) => Promise<OptqResponse<Api, G>>;
+}> = <G extends GetRoutes<Api>, P extends Util.ExtractPath<G>>(resourceId: P, ...optionalParams: OptqFetcherOptionalParams<Api, G & `GET ${P}`>) => Promise<OptqResponse<Api, G & `GET ${P}`>>;
 export type OptqMutator<Api extends {
     OPTQ_VALIDATED: true;
 }> = <R extends MutationRoutes<Api>>(req: Omit<OptqRequest<Api, R>, "id"> & {
@@ -344,4 +342,9 @@ export type PendingResponseResult<Api extends {
     };
     reason: unknown;
 };
+export type OptqRouteConfig<Api> = Util.PrettifyOptional<{
+    [G in GetRoutes<Api>]: OptqGetRouteConfig<Api, G> | (Util.Equals<Util.PickOr<Api[G], "resource", Util.PickOr<Api[G], "data", never>>, Util.PickOr<Api[G], "data", never>> extends true ? undefined : never);
+} & {
+    [R in MutationRoutes<Api>]: OptqMutationRouteConfig<Api, R>;
+}>;
 export {};
